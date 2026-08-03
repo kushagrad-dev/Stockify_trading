@@ -1,15 +1,7 @@
 import React from "react";
 
 const Apps = () => {
-  return (
-    <div className="apps">
-      {/* Apps Container */}
-
-      {/* App Cards / Integrations */}
-
-      {/* Actions or Links */}
-    </div>
-  );
+  return <h1>Apps</h1>;
 };
 
 export default Apps;

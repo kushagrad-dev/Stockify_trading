@@ -4,27 +4,58 @@ const Summary = () => {
   return (
     <>
       <div className="username">
-        {/* User Greeting */}
+        <h6>Hi, User!</h6>
+        <hr className="divider" />
       </div>
 
       <div className="section">
-        {/* Equity Section */}
+        <span>
+          <p>Equity</p>
+        </span>
 
         <div className="data">
-          {/* Margin Overview */}
+          <div className="first">
+            <h3>3.74k</h3>
+            <p>Margin available</p>
+          </div>
+          <hr />
 
-          {/* Balance Information */}
+          <div className="second">
+            <p>
+              Margins used <span>0</span>{" "}
+            </p>
+            <p>
+              Opening balance <span>3.74k</span>{" "}
+            </p>
+          </div>
         </div>
+        <hr className="divider" />
       </div>
 
       <div className="section">
-        {/* Holdings Section */}
+        <span>
+          <p>Holdings (13)</p>
+        </span>
 
         <div className="data">
-          {/* Profit & Loss Overview */}
+          <div className="first">
+            <h3 className="profit">
+              1.55k <small>+5.20%</small>{" "}
+            </h3>
+            <p>P&L</p>
+          </div>
+          <hr />
 
-          {/* Investment Details */}
+          <div className="second">
+            <p>
+              Current Value <span>31.43k</span>{" "}
+            </p>
+            <p>
+              Investment <span>29.88k</span>{" "}
+            </p>
+          </div>
         </div>
+        <hr className="divider" />
       </div>
     </>
   );
