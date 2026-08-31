@@ -7,6 +7,9 @@ const bodyParser = require("body-parser");
 
 const { HoldingsModel } = require("./models/HoldingsModel");
 const {ordersModel} = require("./models/OrdersModel");
+const { HoldingsModel } = require("./models/HoldingsModel");
+const { OrdersModel } = require("./models/OrdersModel");
+const { PositionsModel } = require("./models/PositionsModel");
 const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -31,6 +34,26 @@ app.get("/", (req, res) => {
 // =======================
 // Add Sample Positions
 // =======================
+app.get("/allpositions", async (req, res) => {
+  try {
+    const positions = await PositionsModel.find({});
+
+    res.status(200).json({
+      success: true,
+      data: positions,
+    });
+  } catch (error) {
+    console.error("Error fetching positions:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch positions",
+      error: error.message,
+    });
+  }
+});
+
+
 app.get("/addPositions", async (req, res) => {
   const tempPositions = [
     {

@@ -1,5 +1,6 @@
-import React from "react";
-import { positions } from "../data/data";
+import React, { useEffect, useState } from "react";
+
+const API_URL = "http://localhost:3008";
 
 const formatCurrency = (value) =>
   `₹${Number(value).toLocaleString("en-IN", {
@@ -8,6 +9,42 @@ const formatCurrency = (value) =>
   })}`;
 
 const Positions = () => {
+  const [positions, setPositions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchPositions = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(`${API_URL}/allpositions`);
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.message || "Failed to fetch positions"
+          );
+        }
+
+        setPositions(
+          Array.isArray(result.data) ? result.data : []
+        );
+      } catch (err) {
+        console.error("Error fetching positions:", err);
+        setError(
+          err.message || "Failed to fetch positions"
+        );
+        setPositions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPositions();
+  }, []);
+
   const totals = positions.reduce(
     (acc, stock) => {
       const qty = Number(stock.qty || 0);
@@ -478,7 +515,15 @@ const Positions = () => {
             </span>
           </div>
 
-          {positions.length === 0 ? (
+          {loading ? (
+            <div className="stockify-positions-empty">
+              Loading positions...
+            </div>
+          ) : error ? (
+            <div className="stockify-positions-empty">
+              {error}
+            </div>
+          ) : positions.length === 0 ? (
             <div className="stockify-positions-empty">
               No open positions at the moment.
             </div>
@@ -599,7 +644,7 @@ const Positions = () => {
             </div>
           )}
 
-          {positions.length > 0 && (
+          {positions.length > 0 && !loading && !error && (
             <div className="stockify-positions-footer">
 
               <span>

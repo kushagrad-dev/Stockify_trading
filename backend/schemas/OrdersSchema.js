@@ -1,4 +1,4 @@
-const {}
+const { Schema } = require("mongoose");
 
 const OrdersSchema = new Schema({
     name: String,
@@ -7,4 +7,4 @@ const OrdersSchema = new Schema({
     mode: String,
 });
 
-module.exports = {OrdersSchema};
+module.exports = { OrdersSchema };
