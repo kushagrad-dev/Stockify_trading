@@ -1,6 +1,7 @@
-import React, { useMemo } from "react";
+import React,{useState , useEffect , useMemo } from "react";
 import { VerticalGraph } from "./VerticalGraph";
 import { holdings } from "../data/data";
+import axios from "axios";
 
 const formatCurrency = (value) =>
   `₹${Number(value).toLocaleString("en-IN", {
@@ -18,6 +19,22 @@ const formatSignedCurrency = (value) => {
 };
 
 const Holdings = () => {
+  const [holdings, setHoldings] = useState([]);
+
+  useEffect(() => {
+    axios.get("http://localhost:5000/allholdings")
+      .then((response) => {
+        console.log("Holdings fetched:", response.data.data);
+        setHoldings(response.data.data);
+      })
+      .catch((error) => {
+        console.error("Error fetching holdings:", error);
+      }); 
+  }, []);
+
+
+
+
   const portfolio = useMemo(() => {
     return holdings.map((stock) => {
       const qty = Number(stock.qty || 0);
