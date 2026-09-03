@@ -1,0 +1,25 @@
+<svg width="600" height="180" viewBox="0 0 600 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(40,35)">
+    <rect x="0" y="55" width="24" height="35" rx="4" fill="#387ED1"/>
+    <rect x="34" y="35" width="24" height="55" rx="4" fill="#387ED1"/>
+    <rect x="68" y="10" width="24" height="80" rx="4" fill="#387ED1"/>
+    <path d="M0 95 C25 95, 45 85, 60 70 C75 55, 90 35, 115 15"
+          stroke="#387ED1"
+          stroke-width="10"
+          stroke-linecap="round"
+          fill="none"/>
+    <path d="M103 15 L125 15 L125 37"
+          stroke="#387ED1"
+          stroke-width="10"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"/>
+  </g>
+  <text x="190" y="105"
+        font-family="Inter, Arial, sans-serif"
+        font-size="58"
+        font-weight="700"
+        letter-spacing="1">
+    STOCKIFY
+  </text>
+</svg>
