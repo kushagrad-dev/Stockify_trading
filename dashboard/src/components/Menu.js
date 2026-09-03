@@ -1,10 +1,48 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { Link } from "react-router-dom";
 
 const Menu = () => {
   const [selectedMenu, setSelectedMenu] = useState(0);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [user, setUser] = useState({ name: "User", email: "" });
+
+  useEffect(() => {
+    const token = localStorage.getItem("stockifyToken");
+    const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:3008";
+
+    if (!token) {
+      return;
+    }
+
+    const loadUser = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message);
+        }
+
+        setUser(result.data);
+        localStorage.setItem("stockifyUser", JSON.stringify(result.data));
+      } catch (error) {
+        console.error("Unable to load profile:", error.message);
+      }
+    };
+
+    loadUser();
+  }, []);
+
+  const initials = user.name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 
   const handleMenuClick = (index) => {
     setSelectedMenu(index);
@@ -19,7 +57,7 @@ const Menu = () => {
 
   return (
     <div className="menu-container">
-      <img src="logo.png" style={{ width: "50px" }} />
+      <img src="logo.png" alt="Stockify" style={{ width: "50px" }} />
       <div className="menus">
         <ul>
           <li>
@@ -90,9 +128,9 @@ const Menu = () => {
           </li>
         </ul>
         <hr />
-        <div className="profile" onClick={handleProfileClick}>
-          <div className="avatar">ZU</div>
-          <p className="username">USERID</p>
+        <div className="profile" onClick={handleProfileClick} title={user.email}>
+          <div className="avatar">{initials || "U"}</div>
+          <p className="username">{user.name}</p>
         </div>
       </div>
     </div>

@@ -18,10 +18,14 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // =======================
 // Middleware
 // =======================
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:3000")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  ...(process.env.CLIENT_ORIGIN || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+];
 
 app.use(
   cors({
@@ -141,6 +145,58 @@ app.post("/auth/signup", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create account",
+    });
+  }
+});
+
+const requireAuthentication = (req, res, next) => {
+  const authorization = req.headers.authorization || "";
+  const token = authorization.startsWith("Bearer ")
+    ? authorization.slice(7)
+    : null;
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      message: "Authentication is required",
+    });
+  }
+
+  try {
+    req.auth = jwt.verify(token, process.env.JWT_SECRET);
+    return next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Your session is invalid or has expired",
+    });
+  }
+};
+
+app.get("/auth/me", requireAuthentication, async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.auth.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User account was not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error("Profile lookup error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load your profile",
     });
   }
 });
@@ -349,7 +405,7 @@ app.get("/allholdings", async (req, res) => {
 // =======================
 // Environment Variables
 // =======================
-const PORT = process.env.PORT || 3008;
+const PORT = 3008;
 const MONGO_URL = process.env.MONGO_URL;
 
 // =======================
