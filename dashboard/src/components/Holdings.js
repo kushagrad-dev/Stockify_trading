@@ -1,6 +1,5 @@
-import React,{useState , useEffect , useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { VerticalGraph } from "./VerticalGraph";
-import { holdings } from "../data/data";
 import axios from "axios";
 
 const formatCurrency = (value) =>
@@ -20,21 +19,43 @@ const formatSignedCurrency = (value) => {
 
 const Holdings = () => {
   const [holdings, setHoldings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
+  // Fetch holdings from backend ONCE when component loads
   useEffect(() => {
-    axios.get("http://localhost:5000/allholdings")
-      .then((response) => {
-        console.log("Holdings fetched:", response.data.data);
-        setHoldings(response.data.data);
-      })
-      .catch((error) => {
-        console.error("Error fetching holdings:", error);
-      }); 
+    const fetchHoldings = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await axios.get(
+          "http://localhost:3008/allholdings"
+        );
+
+        console.log("Holdings fetched:", response.data);
+
+        if (response.data && Array.isArray(response.data.data)) {
+          setHoldings(response.data.data);
+        } else {
+          setHoldings([]);
+          setError("Invalid holdings data received from server.");
+        }
+      } catch (err) {
+        console.error("Error fetching holdings:", err);
+
+        setError(
+          "Unable to connect to the backend. Make sure the backend is running on port 3008."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHoldings();
   }, []);
 
-
-
-
+  // Recalculate portfolio whenever holdings data changes
   const portfolio = useMemo(() => {
     return holdings.map((stock) => {
       const qty = Number(stock.qty || 0);
@@ -67,7 +88,7 @@ const Holdings = () => {
         netValue,
       };
     });
-  }, []);
+  }, [holdings]);
 
   const totalInvestment = portfolio.reduce(
     (total, stock) => total + stock.investment,
@@ -543,7 +564,6 @@ const Holdings = () => {
 
       <main className="stockify-holdings-page">
 
-        {/* Header */}
         <header className="stockify-holdings-header">
           <div>
             <p className="stockify-holdings-kicker">
@@ -561,11 +581,7 @@ const Holdings = () => {
 
           <div
             className={`stockify-holdings-status ${
-              isProfit
-                ? "profit"
-                : isLoss
-                ? "loss"
-                : ""
+              isProfit ? "profit" : isLoss ? "loss" : ""
             }`}
           >
             <span className="stockify-holdings-status-dot" />
@@ -578,7 +594,6 @@ const Holdings = () => {
           </div>
         </header>
 
-        {/* Summary */}
         <section className="stockify-holdings-summary">
 
           <div className="stockify-holdings-summary-card">
@@ -611,11 +626,7 @@ const Holdings = () => {
 
           <div
             className={`stockify-holdings-summary-card ${
-              isProfit
-                ? "profit"
-                : isLoss
-                ? "loss"
-                : ""
+              isProfit ? "profit" : isLoss ? "loss" : ""
             }`}
           >
             <span className="stockify-holdings-summary-label">
@@ -657,7 +668,6 @@ const Holdings = () => {
 
         </section>
 
-        {/* Holdings Table */}
         <section className="stockify-holdings-card">
 
           <div className="stockify-holdings-card-header">
@@ -673,7 +683,15 @@ const Holdings = () => {
 
           </div>
 
-          {portfolio.length === 0 ? (
+          {loading ? (
+            <div className="stockify-holdings-empty">
+              Loading holdings...
+            </div>
+          ) : error ? (
+            <div className="stockify-holdings-empty">
+              {error}
+            </div>
+          ) : portfolio.length === 0 ? (
             <div className="stockify-holdings-empty">
               No holdings in your portfolio.
             </div>
@@ -698,92 +716,58 @@ const Holdings = () => {
                 <tbody>
 
                   {portfolio.map((stock) => (
-                    <tr key={stock.name}>
+                    <tr key={stock._id || stock.name}>
 
                       <td>
                         <span className="stockify-holdings-instrument">
-
                           <span className="stockify-holdings-instrument-dot" />
-
                           {stock.name}
-
                         </span>
                       </td>
 
-                      <td>
-                        {stock.qty}
-                      </td>
+                      <td>{stock.qty}</td>
+
+                      <td>{formatCurrency(stock.avg)}</td>
+
+                      <td>{formatCurrency(stock.price)}</td>
+
+                      <td>{formatCurrency(stock.currentValue)}</td>
 
                       <td>
-                        {formatCurrency(stock.avg)}
-                      </td>
-
-                      <td>
-                        {formatCurrency(stock.price)}
-                      </td>
-
-                      <td>
-                        {formatCurrency(stock.currentValue)}
-                      </td>
-
-                      <td>
-
                         <span
                           className={`stockify-holdings-pnl ${
-                            stock.pnl >= 0
-                              ? "profit"
-                              : "loss"
+                            stock.pnl >= 0 ? "profit" : "loss"
                           }`}
                         >
-
                           {formatSignedCurrency(stock.pnl)}
 
                           <small>
-                            {stock.pnlPercent >= 0
-                              ? "+"
-                              : ""}
+                            {stock.pnlPercent >= 0 ? "+" : ""}
                             {stock.pnlPercent.toFixed(2)}%
                           </small>
-
                         </span>
-
                       </td>
 
                       <td>
-
                         <span
                           className={`stockify-holdings-change ${
-                            stock.netValue >= 0
-                              ? "profit"
-                              : "loss"
+                            stock.netValue >= 0 ? "profit" : "loss"
                           }`}
                         >
-                          {stock.netValue >= 0
-                            ? "+"
-                            : ""}
-                          {stock.net} 
+                          {stock.netValue >= 0 ? "+" : ""}
+                          {stock.net}
                         </span>
-
                       </td>
 
                       <td>
-
                         <span
                           className={`stockify-holdings-change ${
-                            stock.dayValue >= 0
-                              ? "profit"
-                              : "loss"
+                            stock.dayValue >= 0 ? "profit" : "loss"
                           }`}
                         >
-                          {stock.dayValue >= 0
-                            ? "+"
-                            : ""}
-                          {Math.abs(
-                            stock.dayValue
-                          ).toFixed(2)}
-                          %
+                          {stock.dayValue >= 0 ? "+" : ""}
+                          {Math.abs(stock.dayValue).toFixed(2)}%
                         </span>
-
                       </td>
 
                     </tr>
@@ -796,7 +780,7 @@ const Holdings = () => {
             </div>
           )}
 
-          {portfolio.length > 0 && (
+          {!loading && !error && portfolio.length > 0 && (
             <div className="stockify-holdings-table-footer">
 
               <span>
@@ -818,7 +802,6 @@ const Holdings = () => {
 
         </section>
 
-        {/* Chart + Portfolio Overview */}
         <section className="stockify-holdings-bottom">
 
           <div className="stockify-holdings-chart-card">
@@ -873,8 +856,7 @@ const Holdings = () => {
                 {portfolio.length > 0
                   ? portfolio.reduce(
                       (best, stock) =>
-                        stock.pnlPercent >
-                        best.pnlPercent
+                        stock.pnlPercent > best.pnlPercent
                           ? stock
                           : best
                     ).name
@@ -894,9 +876,7 @@ const Holdings = () => {
                     : ""
                 }
               >
-                {totalPnlPercent >= 0
-                  ? "+"
-                  : ""}
+                {totalPnlPercent >= 0 ? "+" : ""}
                 {totalPnlPercent.toFixed(2)}%
               </strong>
             </div>

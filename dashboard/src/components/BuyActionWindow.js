@@ -2,12 +2,25 @@ import React, { useContext, useMemo, useState } from "react";
 import axios from "axios";
 
 import GeneralContext from "./GeneralContext";
+import { watchlist } from "../data/data";
 
 const BuyActionWindow = ({ uid }) => {
   const generalContext = useContext(GeneralContext);
 
+  const selectedStock = useMemo(
+    () =>
+      watchlist.find(
+        (stock) =>
+          String(stock.name).toUpperCase() ===
+          String(uid).toUpperCase()
+      ),
+    [uid]
+  );
+
+  const currentStockPrice = Number(selectedStock?.price) || 0;
+
   const [stockQuantity, setStockQuantity] = useState(1);
-  const [stockPrice, setStockPrice] = useState(0);
+  const [stockPrice] = useState(currentStockPrice);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,8 +40,13 @@ const BuyActionWindow = ({ uid }) => {
       return;
     }
 
+    if (!Number.isInteger(quantity)) {
+      setError("Quantity must be a whole number.");
+      return;
+    }
+
     if (!Number.isFinite(price) || price <= 0) {
-      setError("Please enter a valid price.");
+      setError("Current stock price is not available.");
       return;
     }
 
@@ -36,7 +54,7 @@ const BuyActionWindow = ({ uid }) => {
     setIsSubmitting(true);
 
     try {
-      await axios.post("http://localhost:3002/newOrder", {
+      await axios.post("http://localhost:3008/addOrders", {
         name: uid,
         qty: quantity,
         price: price,
@@ -167,14 +185,16 @@ const BuyActionWindow = ({ uid }) => {
             background: #fff;
             color: #202124;
             font-size: 13px;
-            transition:
-              border-color 0.15s ease,
-              box-shadow 0.15s ease;
           }
 
           .stockify-buy-input:focus {
             border-color: #387ed1;
             box-shadow: 0 0 0 3px rgba(56, 126, 209, 0.1);
+          }
+
+          .stockify-buy-input:disabled {
+            background: #f8fafc;
+            color: #737983;
           }
 
           .stockify-buy-summary {
@@ -347,9 +367,10 @@ const BuyActionWindow = ({ uid }) => {
                 min="1"
                 step="1"
                 value={stockQuantity}
-                onChange={(e) =>
-                  setStockQuantity(e.target.value)
-                }
+                onChange={(e) => {
+                  setStockQuantity(e.target.value);
+                  setError("");
+                }}
                 disabled={isSubmitting}
               />
             </div>
@@ -359,28 +380,36 @@ const BuyActionWindow = ({ uid }) => {
                 className="stockify-buy-label"
                 htmlFor="stockify-buy-price"
               >
-                Price per share
+                Current price per share
               </label>
 
               <input
                 className="stockify-buy-input"
                 type="number"
                 id="stockify-buy-price"
-                min="0.05"
-                step="0.05"
                 value={stockPrice}
-                onChange={(e) =>
-                  setStockPrice(e.target.value)
-                }
+                readOnly
                 disabled={isSubmitting}
               />
             </div>
           </div>
 
+          {!selectedStock && (
+            <p className="stockify-buy-error">
+              Current price for {uid || "this stock"} could not be
+              found.
+            </p>
+          )}
+
           <div className="stockify-buy-summary">
             <div>
               <p className="stockify-buy-summary-label">
-                Estimated order value
+                Total order value ({stockQuantity || 0} × ₹
+                {Number(stockPrice || 0).toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+                )
               </p>
 
               <p className="stockify-buy-summary-value">
@@ -433,7 +462,7 @@ const BuyActionWindow = ({ uid }) => {
               type="button"
               className="stockify-buy-button buy"
               onClick={handleBuyClick}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !selectedStock}
             >
               {isSubmitting ? "Placing..." : "Buy"}
             </button>
