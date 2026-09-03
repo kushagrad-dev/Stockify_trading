@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const API_URL = "http://localhost:3008";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:3008";
 
 const formatCurrency = (value) =>
   `₹${Number(value).toLocaleString("en-IN", {

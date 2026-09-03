@@ -54,7 +54,7 @@ const BuyActionWindow = ({ uid }) => {
     setIsSubmitting(true);
 
     try {
-      await axios.post("http://localhost:3008/addOrders", {
+      await axios.post(`${process.env.REACT_APP_API_URL || "http://localhost:3008"}/addOrders`, {
         name: uid,
         qty: quantity,
         price: price,

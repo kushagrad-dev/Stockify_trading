@@ -30,7 +30,7 @@ const Holdings = () => {
         setError("");
 
         const response = await axios.get(
-          "http://localhost:3008/allholdings"
+          `${process.env.REACT_APP_API_URL || "http://localhost:3008"}/allholdings`
         );
 
         console.log("Holdings fetched:", response.data);
