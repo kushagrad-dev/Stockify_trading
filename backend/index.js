@@ -141,7 +141,7 @@ app.post("/auth/signup", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
+  if (typeof email !== "string" || typeof password !== "string") {
     return res.status(400).json({
       success: false,
       message: "Email and password are required",
@@ -208,7 +208,6 @@ app.post("/auth/login", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to login",
-      error: error.message,
     });
   }
 });
