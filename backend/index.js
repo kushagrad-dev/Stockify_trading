@@ -109,9 +109,19 @@ app.post("/auth/signup", async (req, res) => {
       password: hashedPassword,
     });
 
+    const token = jwt.sign(
+      {
+        userId: user._id.toString(),
+        email: user.email,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
     res.status(201).json({
       success: true,
       message: "Account created successfully",
+      token,
       data: {
         id: user._id,
         name: user.name,
