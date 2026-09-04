@@ -381,6 +381,50 @@ app.post("/addOrders", async (req, res) => {
 });
 
 // =======================
+// Fetch Orders
+// =======================
+app.get("/orders", async (req, res) => {
+  try {
+    const orders = await OrdersModel.find({}).sort({ _id: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
+  }
+});
+
+// =======================
+// Get Orders
+// =======================
+app.get("/orders", async (req, res) => {
+  try {
+    const orders = await OrdersModel.find({}).sort({ _id: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
+  }
+});
+
+// =======================
 // Get All Holdings
 // =======================
 app.get("/allholdings", async (req, res) => {

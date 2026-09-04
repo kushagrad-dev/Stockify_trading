@@ -1,19 +1,44 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+const API_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:3008";
 
 const Orders = () => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await axios.get(`${API_URL}/orders`);
+
+        setOrders(response.data?.data || []);
+      } catch (err) {
+        console.error("Failed to fetch orders:", err);
+
+        setError(
+          "Unable to load orders. Please check that the backend is running."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, []);
+
   return (
     <main className="stockify-orders-page">
       <style>{`
         .stockify-orders-page {
           width: 100%;
-          max-width: 1180px;
-          min-height: 420px;
-          margin: 0 auto;
+          min-height: 100%;
           padding: 32px 34px 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
           background: #fafafa;
           color: #202124;
           font-family: -apple-system, BlinkMacSystemFont,
@@ -25,159 +50,169 @@ const Orders = () => {
           box-sizing: border-box;
         }
 
-        .stockify-orders-card {
-          width: min(560px, 100%);
-          padding: 44px 36px;
-          border: 1px solid #e5e7eb;
-          border-radius: 14px;
-          background: #ffffff;
-          box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
-          text-align: center;
-        }
-
-        .stockify-orders-icon {
-          width: 54px;
-          height: 54px;
-          margin: 0 auto 18px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          border: 1px solid #dce8f6;
-          border-radius: 50%;
-
-          background: #f3f8fd;
-          color: #387ed1;
-
-          font-size: 23px;
-          font-weight: 600;
+        .stockify-orders-header {
+          margin-bottom: 22px;
         }
 
         .stockify-orders-eyebrow {
           margin: 0 0 7px;
-
           color: #8a9099;
-
           font-size: 10px;
           font-weight: 700;
-
           letter-spacing: 0.13em;
         }
 
         .stockify-orders-title {
           margin: 0;
-
           color: #202124;
-
-          font-size: 22px;
+          font-size: 24px;
           font-weight: 500;
-
-          line-height: 1.3;
         }
 
-        .stockify-orders-description {
-          max-width: 430px;
+        .stockify-orders-card {
+          width: 100%;
+          overflow: hidden;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          background: #ffffff;
+        }
 
-          margin: 10px auto 24px;
+        .stockify-orders-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
 
+        .stockify-orders-table th {
+          padding: 14px 18px;
+          border-bottom: 1px solid #eceef1;
           color: #737983;
+          background: #fafafa;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-align: left;
+        }
 
+        .stockify-orders-table td {
+          padding: 16px 18px;
+          border-bottom: 1px solid #f0f1f3;
+          color: #30343a;
           font-size: 12px;
-
-          line-height: 1.6;
         }
 
-        .stockify-orders-button {
-          display: inline-flex;
+        .stockify-orders-table tr:last-child td {
+          border-bottom: 0;
+        }
 
-          align-items: center;
-          justify-content: center;
-
-          min-width: 120px;
-          min-height: 38px;
-
-          padding: 0 18px;
-
-          border-radius: 7px;
-
-          background: #387ed1;
-          color: #ffffff;
-
-          font-size: 11px;
+        .stockify-orders-symbol {
           font-weight: 600;
-
-          text-decoration: none;
-
-          transition:
-            background 0.15s ease,
-            transform 0.15s ease;
         }
 
-        .stockify-orders-button:hover {
-          background: #2868b5;
-          transform: translateY(-1px);
+        .stockify-orders-mode {
+          display: inline-block;
+          padding: 5px 9px;
+          border-radius: 5px;
+          background: #eef8f0;
+          color: #16803c;
+          font-size: 10px;
+          font-weight: 700;
         }
 
-        .stockify-orders-button:focus-visible {
-          outline: 3px solid rgba(56, 126, 209, 0.2);
-          outline-offset: 2px;
+        .stockify-orders-empty,
+        .stockify-orders-error {
+          padding: 55px 25px;
+          text-align: center;
+          color: #737983;
+          font-size: 12px;
+        }
+
+        .stockify-orders-error {
+          color: #c62828;
         }
 
         @media (max-width: 600px) {
           .stockify-orders-page {
-            min-height: 360px;
-            padding: 24px 18px 40px;
+            padding: 24px 16px 40px;
           }
 
-          .stockify-orders-card {
-            padding: 34px 22px;
-          }
-
-          .stockify-orders-title {
-            font-size: 20px;
-          }
-        }
-
-        @media (max-width: 400px) {
-          .stockify-orders-page {
-            padding: 20px 13px 32px;
-          }
-
-          .stockify-orders-card {
-            padding: 30px 18px;
+          .stockify-orders-table th,
+          .stockify-orders-table td {
+            padding: 12px 10px;
           }
         }
       `}</style>
 
-      <section className="stockify-orders-card">
-        <div
-          className="stockify-orders-icon"
-          aria-hidden="true"
-        >
-          ₹
-        </div>
-
+      <header className="stockify-orders-header">
         <p className="stockify-orders-eyebrow">
           ORDER HISTORY
         </p>
 
         <h1 className="stockify-orders-title">
-          You haven't placed any orders today
+          Orders
         </h1>
+      </header>
 
-        <p className="stockify-orders-description">
-          Your orders will appear here once you place a
-          trade. Head back to the dashboard and choose a
-          stock to get started.
-        </p>
+      <section className="stockify-orders-card">
+        {loading ? (
+          <div className="stockify-orders-empty">
+            Loading orders...
+          </div>
+        ) : error ? (
+          <div className="stockify-orders-error">
+            {error}
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="stockify-orders-empty">
+            You haven't placed any orders yet.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="stockify-orders-table">
+              <thead>
+                <tr>
+                  <th>STOCK</th>
+                  <th>TYPE</th>
+                  <th>QUANTITY</th>
+                  <th>PRICE</th>
+                  <th>TOTAL</th>
+                </tr>
+              </thead>
 
-        <Link
-          to="/"
-          className="stockify-orders-button"
-        >
-          Get started
-        </Link>
+              <tbody>
+                {orders.map((order) => {
+                  const quantity = Number(order.qty) || 0;
+                  const price = Number(order.price) || 0;
+
+                  return (
+                    <tr key={order._id}>
+                      <td className="stockify-orders-symbol">
+                        {order.name}
+                      </td>
+
+                      <td>
+                        <span className="stockify-orders-mode">
+                          {order.mode}
+                        </span>
+                      </td>
+
+                      <td>
+                        {quantity}
+                      </td>
+
+                      <td>
+                        ₹{price.toFixed(2)}
+                      </td>
+
+                      <td>
+                        ₹{(quantity * price).toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </main>
   );
