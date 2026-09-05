@@ -30,7 +30,37 @@ const formatCompactCurrency = (value) => {
 };
 
 const Summary = () => {
+  const storedUser = localStorage.getItem("stockifyUser");
+
+  let user = null;
+
+  try {
+    user = storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    user = null;
+  }
+
+  const userName =
+    user?.name?.trim() ||
+    user?.username?.trim() ||
+    "User";
+
+  const openingBalance = Number(user?.balance) || 0;
+
+  const handleLogout = () => {
+    // Remove all locally stored authentication data
+    localStorage.removeItem("stockifyToken");
+    localStorage.removeItem("stockifyUser");
+
+    // Redirect directly to the frontend login page
+    window.location.href = "/login";
+  };
+
   const portfolio = useMemo(() => {
+    if (!Array.isArray(holdings)) {
+      return [];
+    }
+
     return holdings.map((stock) => {
       const qty = Number(stock.qty) || 0;
       const avg = Number(stock.avg) || 0;
@@ -67,8 +97,6 @@ const Summary = () => {
       ? (pnl / totalInvestment) * 100
       : 0;
 
-  const openingBalance = 100000;
-
   const marginUsed = totalInvestment;
 
   const marginAvailable = Math.max(
@@ -76,12 +104,13 @@ const Summary = () => {
     0
   );
 
-  const utilization = Math.min(
+  const utilization =
     openingBalance > 0
-      ? (marginUsed / openingBalance) * 100
-      : 0,
-    100
-  );
+      ? Math.min(
+          (marginUsed / openingBalance) * 100,
+          100
+        )
+      : 0;
 
   return (
     <main className="stockify-summary-page">
@@ -100,8 +129,6 @@ const Summary = () => {
         .stockify-summary-page * {
           box-sizing: border-box;
         }
-
-        /* HEADER */
 
         .stockify-summary-header {
           display: flex;
@@ -138,11 +165,17 @@ const Summary = () => {
           line-height: 1.5;
         }
 
+        .stockify-summary-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+
         .stockify-summary-account-badge {
           display: inline-flex;
           align-items: center;
           gap: 7px;
-          flex-shrink: 0;
           padding: 8px 12px;
           border: 1px solid #dcebdd;
           border-radius: 20px;
@@ -160,7 +193,26 @@ const Summary = () => {
           background: #2e7d32;
         }
 
-        /* SUMMARY CARDS */
+        .stockify-summary-logout-button {
+          padding: 8px 13px;
+          border: 1px solid #f0d6d6;
+          border-radius: 20px;
+          background: #fff;
+          color: #d14343;
+          font-size: 10px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background .2s ease, border-color .2s ease;
+        }
+
+        .stockify-summary-logout-button:hover {
+          background: #fff5f5;
+          border-color: #e8bcbc;
+        }
+
+        .stockify-summary-logout-button:active {
+          transform: translateY(1px);
+        }
 
         .stockify-summary-cards {
           display: grid;
@@ -220,8 +272,6 @@ const Summary = () => {
           font-weight: 600;
         }
 
-        /* MAIN GRID */
-
         .stockify-summary-panels {
           display: grid;
           grid-template-columns:
@@ -261,8 +311,6 @@ const Summary = () => {
           font-size: 10px;
           white-space: nowrap;
         }
-
-        /* EQUITY */
 
         .stockify-summary-equity-body {
           padding: 22px 20px;
@@ -314,8 +362,6 @@ const Summary = () => {
           white-space: nowrap;
         }
 
-        /* MARGIN BAR */
-
         .stockify-summary-meter {
           margin-top: 24px;
         }
@@ -346,8 +392,6 @@ const Summary = () => {
           border-radius: inherit;
           background: #387ed1;
         }
-
-        /* P&L */
 
         .stockify-summary-pnl-section {
           padding: 20px;
@@ -380,8 +424,6 @@ const Summary = () => {
           font-size: 12px;
           font-weight: 600;
         }
-
-        /* HOLDINGS */
 
         .stockify-summary-holding-row {
           display: grid;
@@ -423,8 +465,6 @@ const Summary = () => {
           text-align: right;
           white-space: nowrap;
         }
-
-        /* OVERVIEW */
 
         .stockify-summary-overview-body {
           padding: 18px 20px;
@@ -471,8 +511,6 @@ const Summary = () => {
           line-height: 1.5;
         }
 
-        /* TABLET */
-
         @media (max-width: 1000px) {
           .stockify-summary-panels {
             grid-template-columns: 1fr;
@@ -487,6 +525,11 @@ const Summary = () => {
           .stockify-summary-header {
             align-items: flex-start;
             flex-direction: column;
+          }
+
+          .stockify-summary-header-actions {
+            width: 100%;
+            justify-content: space-between;
           }
 
           .stockify-summary-cards {
@@ -504,8 +547,6 @@ const Summary = () => {
             border-left: 0;
           }
         }
-
-        /* MOBILE */
 
         @media (max-width: 480px) {
           .stockify-summary-page {
@@ -543,6 +584,14 @@ const Summary = () => {
           .stockify-summary-holding-qty {
             display: none;
           }
+
+          .stockify-summary-account-badge {
+            align-self: flex-start;
+          }
+
+          .stockify-summary-header-actions {
+            align-items: center;
+          }
         }
       `}</style>
 
@@ -554,7 +603,7 @@ const Summary = () => {
           </p>
 
           <h1 className="stockify-summary-title">
-            Hi, User!
+            Hi, {userName}!
           </h1>
 
           <p className="stockify-summary-subtitle">
@@ -562,9 +611,19 @@ const Summary = () => {
           </p>
         </div>
 
-        <div className="stockify-summary-account-badge">
-          <span className="stockify-summary-account-dot" />
-          ACCOUNT ACTIVE
+        <div className="stockify-summary-header-actions">
+          <span className="stockify-summary-account-badge">
+            <span className="stockify-summary-account-dot" />
+            ACCOUNT ACTIVE
+          </span>
+
+          <button
+            type="button"
+            className="stockify-summary-logout-button"
+            onClick={handleLogout}
+          >
+            LOGOUT
+          </button>
         </div>
       </header>
 
@@ -621,7 +680,6 @@ const Summary = () => {
 
       {/* MAIN PANELS */}
       <section className="stockify-summary-panels">
-
         {/* EQUITY PANEL */}
         <div className="stockify-summary-panel">
           <div className="stockify-summary-panel-header">
@@ -636,7 +694,6 @@ const Summary = () => {
 
           <div className="stockify-summary-equity-body">
             <div className="stockify-summary-equity-main">
-
               <div>
                 <p className="stockify-summary-label">
                   Margin available
@@ -740,13 +797,13 @@ const Summary = () => {
                   b.currentValue - a.currentValue
               )
               .slice(0, 5)
-              .map((stock) => (
+              .map((stock, index) => (
                 <li
                   className="stockify-summary-holding-row"
-                  key={stock.name}
+                  key={`${stock.name || "holding"}-${index}`}
                 >
                   <span className="stockify-summary-holding-name">
-                    {stock.name}
+                    {stock.name || "Unknown"}
                   </span>
 
                   <span className="stockify-summary-holding-qty">
@@ -758,6 +815,14 @@ const Summary = () => {
                   </span>
                 </li>
               ))}
+
+            {portfolio.length === 0 && (
+              <li className="stockify-summary-holding-row">
+                <span className="stockify-summary-holding-name">
+                  No holdings available
+                </span>
+              </li>
+            )}
           </ul>
         </div>
 
@@ -821,8 +886,8 @@ const Summary = () => {
             </div>
 
             <div className="stockify-summary-note">
-              Values are calculated automatically from
-              your current Stockify holdings dataset.
+              Your account balance is loaded from your
+              Stockify user account.
             </div>
           </div>
         </aside>

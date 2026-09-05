@@ -1,23 +1,22 @@
+const authRoutes = require("./routes/authRoutes");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-
 const { HoldingsModel } = require("./models/HoldingsModel");
 const { OrdersModel } = require("./models/OrdersModel");
 const { PositionsModel } = require("./models/PositionsModel");
-const { UserModel } = require("./models/UserModel");
-
 const app = express();
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // =======================
 // Middleware
 // =======================
+
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
@@ -39,12 +38,15 @@ app.use(
     },
   })
 );
+
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use("/auth", authRoutes);
 
 // =======================
-// Basic Route     
+// Basic Route
 // =======================
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -52,105 +54,15 @@ app.get("/", (req, res) => {
   });
 });
 
+
 // =======================
-// User Signup
+// Authentication Middleware
 // =======================
-app.post("/auth/signup", async (req, res) => {
-  const { name, email, password } = req.body;
-
-  if (
-    typeof name !== "string" ||
-    typeof email !== "string" ||
-    typeof password !== "string"
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: "Name, email, and password are required",
-    });
-  }
-
-  const trimmedName = name.trim();
-  const normalizedEmail = email.trim().toLowerCase();
-
-  if (trimmedName.length < 2 || trimmedName.length > 80) {
-    return res.status(400).json({
-      success: false,
-      message: "Name must be between 2 and 80 characters",
-    });
-  }
-
-  if (!emailPattern.test(normalizedEmail) || normalizedEmail.length > 254) {
-    return res.status(400).json({
-      success: false,
-      message: "Enter a valid email address",
-    });
-  }
-
-  if (password.length < 8) {
-    return res.status(400).json({
-      success: false,
-      message: "Password must be at least 8 characters",
-    });
-  }
-
-  try {
-    const existingUser = await UserModel.findOne({
-      email: normalizedEmail,
-    });
-
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: "An account with this email already exists",
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await UserModel.create({
-      name: trimmedName,
-      email: normalizedEmail,
-      password: hashedPassword,
-    });
-
-    const token = jwt.sign(
-      {
-        userId: user._id.toString(),
-        email: user.email,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: "Account created successfully",
-      token,
-      data: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
-    });
-  } catch (error) {
-    console.error("Signup error:", error);
-
-    if (error && error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "An account with this email already exists",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to create account",
-    });
-  }
-});
 
 const requireAuthentication = (req, res, next) => {
+
   const authorization = req.headers.authorization || "";
+
   const token = authorization.startsWith("Bearer ")
     ? authorization.slice(7)
     : null;
@@ -173,114 +85,12 @@ const requireAuthentication = (req, res, next) => {
   }
 };
 
-app.get("/auth/me", requireAuthentication, async (req, res) => {
-  try {
-    const user = await UserModel.findById(req.auth.userId);
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User account was not found",
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
-    });
-  } catch (error) {
-    console.error("Profile lookup error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Unable to load your profile",
-    });
-  }
-});
-
-// =======================
-// User Login
-// =======================
-app.post("/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (typeof email !== "string" || typeof password !== "string") {
-    return res.status(400).json({
-      success: false,
-      message: "Email and password are required",
-    });
-  }
-
-  try {
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const user = await UserModel.findOne({
-      email: normalizedEmail,
-    }).select("+password");
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-
-    const passwordMatches = await bcrypt.compare(
-      password,
-      user.password
-    );
-
-    if (!passwordMatches) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
-
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({
-        success: false,
-        message: "JWT_SECRET is missing in .env",
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        userId: user._id.toString(),
-        email: user.email,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      }
-    );
-
-    res.status(200).json({
-      success: true,
-      message: "Login successful",
-      token,
-      data: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to login",
-    });
-  }
-});
 
 // =======================
 // Add Sample Positions
 // =======================
+
 app.get("/addPositions", async (req, res) => {
   const tempPositions = [
     {
@@ -310,7 +120,7 @@ app.get("/addPositions", async (req, res) => {
       tempPositions
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Positions added successfully",
       data: positions,
@@ -318,7 +128,7 @@ app.get("/addPositions", async (req, res) => {
   } catch (error) {
     console.error("Error adding positions:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to add positions",
       error: error.message,
@@ -329,18 +139,19 @@ app.get("/addPositions", async (req, res) => {
 // =======================
 // Get All Positions
 // =======================
+
 app.get("/allpositions", async (req, res) => {
   try {
     const positions = await PositionsModel.find({});
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: positions,
     });
   } catch (error) {
     console.error("Error fetching positions:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch positions",
       error: error.message,
@@ -349,22 +160,49 @@ app.get("/allpositions", async (req, res) => {
 });
 
 // =======================
-// Add Order
+// Add BUY Order
 // =======================
+
 app.post("/addOrders", async (req, res) => {
   const { name, qty, price, mode } = req.body;
 
+  const quantity = Number(qty);
+  const orderPrice = Number(price);
+
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({
+      success: false,
+      message: "Stock name is required",
+    });
+  }
+
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Quantity must be a positive whole number",
+    });
+  }
+
+  if (!Number.isFinite(orderPrice) || orderPrice <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "A valid stock price is required",
+    });
+  }
+
   try {
+    const stockName = String(name).trim();
+
     const newOrder = new OrdersModel({
-      name,
-      qty,
-      price,
-      mode,
+      name: stockName,
+      qty: quantity,
+      price: orderPrice,
+      mode: mode || "BUY",
     });
 
     const savedOrder = await newOrder.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Order added successfully",
       data: savedOrder,
@@ -372,9 +210,114 @@ app.post("/addOrders", async (req, res) => {
   } catch (error) {
     console.error("Error adding order:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to add order",
+      error: error.message,
+    });
+  }
+});
+// =======================
+// Sell Order
+// =======================
+app.post("/sellOrder", async (req, res) => {
+  const { name, qty, price } = req.body;
+
+  try {
+    // Validate input
+    if (typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Stock name is required",
+      });
+    }
+
+    const quantity = Number(qty);
+    const sellPrice = Number(price);
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be a positive whole number",
+      });
+    }
+
+    if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Price must be greater than 0",
+      });
+    }
+
+    const stockName = name.trim().toUpperCase();
+
+    // Find the holding
+    const holding = await HoldingsModel.findOne({
+      name: new RegExp(`^${stockName}$`, "i"),
+    });
+
+    if (!holding) {
+      return res.status(404).json({
+        success: false,
+        message: `You do not own any ${stockName} shares`,
+      });
+    }
+
+    const ownedQuantity = Number(holding.qty) || 0;
+
+    // Check available quantity
+    if (quantity > ownedQuantity) {
+      return res.status(400).json({
+        success: false,
+        message: `You only own ${ownedQuantity} share${
+          ownedQuantity === 1 ? "" : "s"
+        } of ${stockName}`,
+      });
+    }
+
+    const remainingQuantity = ownedQuantity - quantity;
+
+    // Create SELL order
+    const newOrder = new OrdersModel({
+      name: stockName,
+      qty: quantity,
+      price: sellPrice,
+      mode: "SELL",
+    });
+
+    const savedOrder = await newOrder.save();
+
+    // IMPORTANT:
+    // Actually update the holding in MongoDB
+    if (remainingQuantity === 0) {
+      await HoldingsModel.deleteOne({
+        _id: holding._id,
+      });
+    } else {
+      holding.qty = remainingQuantity;
+
+      // Keep the current market price
+      holding.price = sellPrice;
+
+      await holding.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `${quantity} share${
+        quantity === 1 ? "" : "s"
+      } of ${stockName} sold successfully`,
+      data: {
+        order: savedOrder,
+        remainingQuantity,
+      },
+    });
+  } catch (error) {
+    console.error("Error selling stock:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to sell stock",
       error: error.message,
     });
   }
@@ -383,40 +326,21 @@ app.post("/addOrders", async (req, res) => {
 // =======================
 // Fetch Orders
 // =======================
+
 app.get("/orders", async (req, res) => {
   try {
-    const orders = await OrdersModel.find({}).sort({ _id: -1 });
+    const orders = await OrdersModel.find({}).sort({
+      _id: -1,
+    });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: orders,
     });
   } catch (error) {
     console.error("Error fetching orders:", error);
 
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch orders",
-      error: error.message,
-    });
-  }
-});
-
-// =======================
-// Get Orders
-// =======================
-app.get("/orders", async (req, res) => {
-  try {
-    const orders = await OrdersModel.find({}).sort({ _id: -1 });
-
-    res.status(200).json({
-      success: true,
-      data: orders,
-    });
-  } catch (error) {
-    console.error("Error fetching orders:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch orders",
       error: error.message,
@@ -427,18 +351,19 @@ app.get("/orders", async (req, res) => {
 // =======================
 // Get All Holdings
 // =======================
+
 app.get("/allholdings", async (req, res) => {
   try {
     const holdings = await HoldingsModel.find({});
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: holdings,
     });
   } catch (error) {
     console.error("Error fetching holdings:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch holdings",
       error: error.message,
@@ -449,12 +374,14 @@ app.get("/allholdings", async (req, res) => {
 // =======================
 // Environment Variables
 // =======================
+
 const PORT = 3008;
 const MONGO_URL = process.env.MONGO_URL;
 
 // =======================
 // Start Server
 // =======================
+
 const startServer = async () => {
   try {
     if (!MONGO_URL) {

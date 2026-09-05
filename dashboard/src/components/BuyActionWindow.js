@@ -1,11 +1,16 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
 import GeneralContext from "./GeneralContext";
 import { watchlist } from "../data/data";
 
-const BuyActionWindow = ({ uid }) => {
+const API_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:3008";
+
+const BuyActionWindow = ({ uid, mode = "BUY" }) => {
   const generalContext = useContext(GeneralContext);
+
+  const isSellMode = mode === "SELL";
 
   const selectedStock = useMemo(
     () =>
@@ -21,9 +26,60 @@ const BuyActionWindow = ({ uid }) => {
 
   const [stockQuantity, setStockQuantity] = useState(1);
   const [stockPrice] = useState(currentStockPrice);
+
+  const [ownedQuantity, setOwnedQuantity] = useState(null);
+  const [isLoadingHolding, setIsLoadingHolding] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // ==========================================
+  // GET HOLDING WHEN SELL WINDOW OPENS
+  // ==========================================
+  useEffect(() => {
+    if (!isSellMode || !uid) return;
+
+    const fetchHolding = async () => {
+      setIsLoadingHolding(true);
+      setError("");
+
+      try {
+        const response = await axios.get(
+          `${API_URL}/allholdings`
+        );
+
+        const holdings = response?.data?.data || [];
+
+        const holding = holdings.find(
+          (item) =>
+            String(item.name).toUpperCase() ===
+            String(uid).toUpperCase()
+        );
+
+        if (!holding) {
+          setOwnedQuantity(0);
+          setError(`You do not own any ${uid} shares.`);
+        } else {
+          setOwnedQuantity(Number(holding.qty) || 0);
+        }
+      } catch (err) {
+        console.error("Failed to fetch holding:", err);
+
+        setError(
+          err?.response?.data?.message ||
+            "Unable to check your holdings."
+        );
+      } finally {
+        setIsLoadingHolding(false);
+      }
+    };
+
+    fetchHolding();
+  }, [uid, isSellMode]);
+
+  // ==========================================
+  // TOTAL ORDER VALUE
+  // ==========================================
   const marginRequired = useMemo(() => {
     const quantity = Number(stockQuantity) || 0;
     const price = Number(stockPrice) || 0;
@@ -31,10 +87,14 @@ const BuyActionWindow = ({ uid }) => {
     return quantity * price;
   }, [stockQuantity, stockPrice]);
 
-  const handleBuyClick = async () => {
+  // ==========================================
+  // BUY / SELL
+  // ==========================================
+  const handleActionClick = async () => {
     const quantity = Number(stockQuantity);
     const price = Number(stockPrice);
 
+    // Quantity validation
     if (!Number.isFinite(quantity) || quantity <= 0) {
       setError("Please enter a valid quantity.");
       return;
@@ -45,42 +105,118 @@ const BuyActionWindow = ({ uid }) => {
       return;
     }
 
+    // Price validation
     if (!Number.isFinite(price) || price <= 0) {
       setError("Current stock price is not available.");
       return;
+    }
+
+    // ==========================================
+    // SELL VALIDATION
+    // ==========================================
+    if (isSellMode) {
+      if (ownedQuantity === null) {
+        setError("Please wait while we check your holdings.");
+        return;
+      }
+
+      if (ownedQuantity <= 0) {
+        setError(`You do not own any ${uid} shares.`);
+        return;
+      }
+
+      if (quantity > ownedQuantity) {
+        setError(
+          `You only own ${ownedQuantity} share${
+            ownedQuantity === 1 ? "" : "s"
+          } of ${uid}.`
+        );
+        return;
+      }
     }
 
     setError("");
     setIsSubmitting(true);
 
     try {
-      await axios.post(`${process.env.REACT_APP_API_URL || "http://localhost:3008"}/addOrders`, {
-        name: uid,
-        qty: quantity,
-        price: price,
-        mode: "BUY",
-      });
+      // ==========================================
+      // SELL ORDER
+      // ==========================================
+      if (isSellMode) {
+        await axios.post(`${API_URL}/sellOrder`, {
+          name: uid,
+          qty: quantity,
+          price: price,
+        });
+      }
 
+      // ==========================================
+      // BUY ORDER
+      // ==========================================
+      else {
+        await axios.post(`${API_URL}/addOrders`, {
+          name: uid,
+          qty: quantity,
+          price: price,
+          mode: "BUY",
+        });
+      }
+
+      // Close modal
       if (generalContext?.closeBuyWindow) {
         generalContext.closeBuyWindow();
       }
+
+      // Refresh dashboard so holdings/orders update
+      window.location.reload();
     } catch (err) {
-      console.error("Failed to place buy order:", err);
+      console.error(
+        `Failed to place ${
+          isSellMode ? "sell" : "buy"
+        } order:`,
+        err
+      );
 
       setError(
         err?.response?.data?.message ||
-          "Unable to place the order. Please check that the backend is running."
+          `Unable to place the ${
+            isSellMode ? "sell" : "buy"
+          } order. Please check that the backend is running.`
       );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ==========================================
+  // CANCEL
+  // ==========================================
   const handleCancelClick = () => {
-    if (!isSubmitting && generalContext?.closeBuyWindow) {
+    if (
+      !isSubmitting &&
+      generalContext?.closeBuyWindow
+    ) {
       generalContext.closeBuyWindow();
     }
   };
+
+  // ==========================================
+  // FORMATTING
+  // ==========================================
+  const formattedPrice = Number(
+    stockPrice || 0
+  ).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const formattedTotal = marginRequired.toLocaleString(
+    "en-IN",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
 
   return (
     <div className="stockify-buy-overlay">
@@ -88,7 +224,7 @@ const BuyActionWindow = ({ uid }) => {
         className="stockify-buy-window"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="stockify-buy-title"
+        aria-labelledby="stockify-action-title"
       >
         <style>{`
           .stockify-buy-overlay {
@@ -147,8 +283,8 @@ const BuyActionWindow = ({ uid }) => {
             flex-shrink: 0;
             padding: 7px 10px;
             border-radius: 7px;
-            background: #eef5fc;
-            color: #387ed1;
+            background: ${isSellMode ? "#fff1f1" : "#eef5fc"};
+            color: ${isSellMode ? "#d14b4b" : "#387ed1"};
             font-size: 11px;
             font-weight: 700;
           }
@@ -185,6 +321,7 @@ const BuyActionWindow = ({ uid }) => {
             background: #fff;
             color: #202124;
             font-size: 13px;
+            box-sizing: border-box;
           }
 
           .stockify-buy-input:focus {
@@ -237,6 +374,12 @@ const BuyActionWindow = ({ uid }) => {
             color: #c43d3d;
             font-size: 10px;
             line-height: 1.45;
+          }
+
+          .stockify-buy-holding {
+            margin-top: 12px;
+            color: #737983;
+            font-size: 10px;
           }
 
           .stockify-buy-footer {
@@ -301,6 +444,11 @@ const BuyActionWindow = ({ uid }) => {
             color: #fff;
           }
 
+          .stockify-buy-button.sell {
+            background: #d14b4b;
+            color: #fff;
+          }
+
           .stockify-buy-button.cancel {
             border: 1px solid #dfe3e8;
             background: #fff;
@@ -331,6 +479,7 @@ const BuyActionWindow = ({ uid }) => {
           }
         `}</style>
 
+        {/* HEADER */}
         <div className="stockify-buy-header">
           <div className="stockify-buy-heading">
             <p className="stockify-buy-eyebrow">
@@ -338,10 +487,10 @@ const BuyActionWindow = ({ uid }) => {
             </p>
 
             <h2
-              id="stockify-buy-title"
+              id="stockify-action-title"
               className="stockify-buy-title"
             >
-              Buy stock
+              {isSellMode ? "Sell stock" : "Buy stock"}
             </h2>
           </div>
 
@@ -350,8 +499,11 @@ const BuyActionWindow = ({ uid }) => {
           </span>
         </div>
 
+        {/* BODY */}
         <div className="stockify-buy-body">
           <div className="stockify-buy-input-grid">
+
+            {/* QUANTITY */}
             <div className="stockify-buy-field">
               <label
                 className="stockify-buy-label"
@@ -365,16 +517,25 @@ const BuyActionWindow = ({ uid }) => {
                 type="number"
                 id="stockify-buy-quantity"
                 min="1"
+                max={
+                  isSellMode && ownedQuantity > 0
+                    ? ownedQuantity
+                    : undefined
+                }
                 step="1"
                 value={stockQuantity}
                 onChange={(e) => {
                   setStockQuantity(e.target.value);
                   setError("");
                 }}
-                disabled={isSubmitting}
+                disabled={
+                  isSubmitting ||
+                  isLoadingHolding
+                }
               />
             </div>
 
+            {/* PRICE */}
             <div className="stockify-buy-field">
               <label
                 className="stockify-buy-label"
@@ -394,38 +555,46 @@ const BuyActionWindow = ({ uid }) => {
             </div>
           </div>
 
+          {/* OWNED QUANTITY */}
+          {isSellMode &&
+            ownedQuantity !== null && (
+              <p className="stockify-buy-holding">
+                Available to sell:{" "}
+                <strong>{ownedQuantity}</strong>{" "}
+                share
+                {ownedQuantity === 1 ? "" : "s"}
+              </p>
+            )}
+
+          {/* STOCK NOT FOUND */}
           {!selectedStock && (
             <p className="stockify-buy-error">
-              Current price for {uid || "this stock"} could not be
+              Current price for{" "}
+              {uid || "this stock"} could not be
               found.
             </p>
           )}
 
+          {/* TOTAL */}
           <div className="stockify-buy-summary">
             <div>
               <p className="stockify-buy-summary-label">
-                Total order value ({stockQuantity || 0} × ₹
-                {Number(stockPrice || 0).toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-                )
+                Total order value (
+                {stockQuantity || 0} × ₹
+                {formattedPrice})
               </p>
 
               <p className="stockify-buy-summary-value">
-                ₹
-                {marginRequired.toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                ₹{formattedTotal}
               </p>
             </div>
 
             <span className="stockify-buy-summary-side">
-              CNC / BUY
+              CNC / {isSellMode ? "SELL" : "BUY"}
             </span>
           </div>
 
+          {/* ERROR */}
           {error && (
             <p className="stockify-buy-error">
               {error}
@@ -433,22 +602,24 @@ const BuyActionWindow = ({ uid }) => {
           )}
         </div>
 
+        {/* FOOTER */}
         <div className="stockify-buy-footer">
+
           <div className="stockify-buy-margin">
             <span className="stockify-buy-margin-label">
-              Margin required
+              {isSellMode
+                ? "Sell value"
+                : "Margin required"}
             </span>
 
             <span className="stockify-buy-margin-value">
-              ₹
-              {marginRequired.toLocaleString("en-IN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              ₹{formattedTotal}
             </span>
           </div>
 
           <div className="stockify-buy-actions">
+
+            {/* CANCEL */}
             <button
               type="button"
               className="stockify-buy-button cancel"
@@ -458,14 +629,31 @@ const BuyActionWindow = ({ uid }) => {
               Cancel
             </button>
 
+            {/* BUY / SELL */}
             <button
               type="button"
-              className="stockify-buy-button buy"
-              onClick={handleBuyClick}
-              disabled={isSubmitting || !selectedStock}
+              className={`stockify-buy-button ${
+                isSellMode ? "sell" : "buy"
+              }`}
+              onClick={handleActionClick}
+              disabled={
+                isSubmitting ||
+                isLoadingHolding ||
+                !selectedStock ||
+                (isSellMode &&
+                  (ownedQuantity === null ||
+                    ownedQuantity <= 0))
+              }
             >
-              {isSubmitting ? "Placing..." : "Buy"}
+              {isSubmitting
+                ? isSellMode
+                  ? "Selling..."
+                  : "Placing..."
+                : isSellMode
+                ? "Sell"
+                : "Buy"}
             </button>
+
           </div>
         </div>
       </div>
