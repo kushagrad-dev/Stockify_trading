@@ -37,6 +37,7 @@ const Summary = () => {
   try {
     user = storedUser ? JSON.parse(storedUser) : null;
   } catch (error) {
+    console.error("Unable to read stored user:", error);
     user = null;
   }
 
@@ -47,13 +48,12 @@ const Summary = () => {
 
   const openingBalance = Number(user?.balance) || 0;
 
+  // LOGOUT
   const handleLogout = () => {
-    // Remove all locally stored authentication data
     localStorage.removeItem("stockifyToken");
     localStorage.removeItem("stockifyUser");
 
-    // Redirect directly to the frontend login page
-    window.location.href = "/login";
+    window.location.replace("http://10.98.206.93:3000/login");
   };
 
   const portfolio = useMemo(() => {
@@ -165,7 +165,7 @@ const Summary = () => {
           line-height: 1.5;
         }
 
-        .stockify-summary-header-actions {
+        .stockify-summary-account-area {
           display: flex;
           align-items: center;
           gap: 8px;
@@ -194,7 +194,7 @@ const Summary = () => {
         }
 
         .stockify-summary-logout-button {
-          padding: 8px 13px;
+          padding: 8px 12px;
           border: 1px solid #f0d6d6;
           border-radius: 20px;
           background: #fff;
@@ -202,12 +202,11 @@ const Summary = () => {
           font-size: 10px;
           font-weight: 700;
           cursor: pointer;
-          transition: background .2s ease, border-color .2s ease;
+          transition: background .15s ease;
         }
 
         .stockify-summary-logout-button:hover {
           background: #fff5f5;
-          border-color: #e8bcbc;
         }
 
         .stockify-summary-logout-button:active {
@@ -527,9 +526,9 @@ const Summary = () => {
             flex-direction: column;
           }
 
-          .stockify-summary-header-actions {
+          .stockify-summary-account-area {
             width: 100%;
-            justify-content: space-between;
+            justify-content: flex-start;
           }
 
           .stockify-summary-cards {
@@ -585,12 +584,8 @@ const Summary = () => {
             display: none;
           }
 
-          .stockify-summary-account-badge {
-            align-self: flex-start;
-          }
-
-          .stockify-summary-header-actions {
-            align-items: center;
+          .stockify-summary-account-area {
+            flex-wrap: wrap;
           }
         }
       `}</style>
@@ -611,7 +606,7 @@ const Summary = () => {
           </p>
         </div>
 
-        <div className="stockify-summary-header-actions">
+        <div className="stockify-summary-account-area">
           <span className="stockify-summary-account-badge">
             <span className="stockify-summary-account-dot" />
             ACCOUNT ACTIVE

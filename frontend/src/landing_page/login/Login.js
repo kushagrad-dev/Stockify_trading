@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { API_URL, DASHBOARD_URL } from "../../config/api";
+
+const API_URL = "http://10.98.206.93:3008";
 
 function Login() {
   const [formData, setFormData] = useState({
@@ -45,14 +46,12 @@ function Login() {
 
       const result = await response.json().catch(() => ({}));
 
-      // Backend error
       if (!response.ok) {
         throw new Error(
           result.message || "Unable to log in."
         );
       }
 
-      // Make sure backend returned the expected data
       if (!result.token || !result.user) {
         console.error("Invalid login response:", result);
 
@@ -67,13 +66,15 @@ function Login() {
         result.token
       );
 
-      // Save logged-in user
+      // Save complete logged-in user
       localStorage.setItem(
         "stockifyUser",
         JSON.stringify(result.user)
       );
 
-      // Show success message
+      console.log("Login successful");
+      console.log("Logged-in user:", result.user);
+
       setStatus({
         type: "success",
         message: `Welcome back, ${
@@ -81,8 +82,18 @@ function Login() {
         }! Opening your dashboard…`,
       });
 
-      // Redirect to dashboard
-      window.location.assign(DASHBOARD_URL);
+      /*
+       * React Router navigation.
+       *
+       * Do NOT use window.location here.
+       * This keeps us inside the React application.
+       */
+      const dashboardUrl =
+        "http://10.98.206.93:3001/#user=" +
+        encodeURIComponent(JSON.stringify(result.user));
+
+window.location.href = dashboardUrl;
+
     } catch (error) {
       console.error("Login error:", error);
 
@@ -92,7 +103,7 @@ function Login() {
           error.message ||
           "Unable to reach the server. Please try again.",
       });
-    } finally {
+
       setIsSubmitting(false);
     }
   };

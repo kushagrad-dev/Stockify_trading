@@ -130,9 +130,11 @@ code {
 
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 
+  position: relative;
+
   z-index: 100;
 
-  overflow: hidden;
+  overflow: visible;
 }
 
 .indices-container {
@@ -223,7 +225,7 @@ code {
   align-items: center;
   justify-content: space-between;
 
-  overflow: hidden;
+  overflow: visible;
 }
 
 .logo {
@@ -242,7 +244,7 @@ code {
   align-items: center;
   justify-content: flex-end;
 
-  overflow: hidden;
+  overflow: visible;
 }
 
 .menus ul {
@@ -286,52 +288,281 @@ code {
   color: #f56834;
 }
 
-.profile {
+
+/* =========================================
+   PROFILE
+   ========================================= */
+
+.profile-wrapper {
+  position: relative;
+
   display: flex;
   align-items: center;
-  justify-content: center;
+
+  margin-left: 24px;
 
   flex-shrink: 0;
 
-  margin-left: 22px;
+  height: 100%;
+}
+
+.profile {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  min-height: 38px;
+
+  padding: 4px 8px;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  background: transparent;
+
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.profile:hover {
+  background: #f7f8fa;
 }
 
 .profile .avatar {
   width: 30px;
   height: 30px;
 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
   flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: #387ed1;
+
+  color: #ffffff;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  text-transform: uppercase;
+}
+
+.profile .username {
+  max-width: 110px;
+
+  margin: 0;
+
+  overflow: hidden;
+
+  color: #424242;
+
+  font-size: 0.76rem;
+  font-weight: 500;
+
+  line-height: 1.2;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-arrow {
+  margin-left: 2px;
+
+  color: #8a9099;
+
+  font-size: 8px;
+  line-height: 1;
+
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.profile:hover .profile-arrow {
+  color: #555b63;
+}
+
+
+/* =========================================
+   PROFILE DROPDOWN
+   ========================================= */
+
+.profile-dropdown {
+  position: absolute;
+
+  top: calc(100% + 10px);
+
+  right: 0;
+  left: auto;
+
+  width: 280px;
+
+  padding: 16px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  border-radius: 12px;
+
+  box-shadow:
+    0 16px 35px rgba(0, 0, 0, 0.12),
+    0 4px 10px rgba(0, 0, 0, 0.05);
+
+  z-index: 1000;
+
+  animation: profileDropdownIn 0.16s ease-out;
+}
+
+@keyframes profileDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* =========================================
+   DROPDOWN HEADER
+   ========================================= */
+
+.profile-dropdown-header {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+}
+
+.profile-dropdown-avatar {
+  width: 46px;
+  height: 46px;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
+  flex-shrink: 0;
+
   border-radius: 50%;
 
-  background: #fce5fc;
-  color: #dd8bdd;
+  background: #387ed1;
 
-  font-size: 0.7rem;
-  font-weight: 400;
+  color: #ffffff;
 
-  margin-right: 8px;
+  font-size: 15px;
+  font-weight: 600;
+
+  text-transform: uppercase;
 }
 
-.profile .username {
-  margin: 0;
+.profile-dropdown-user {
+  min-width: 0;
 
-  font-size: 0.78rem;
-  font-weight: 300;
+  display: flex;
+  flex-direction: column;
 
+  gap: 5px;
+}
+
+.profile-dropdown-user strong {
+  display: block;
+
+  max-width: 190px;
+
+  overflow: hidden;
+
+  color: #202124;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  line-height: 1.25;
+
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.profile:hover {
-  cursor: pointer;
+.profile-dropdown-user span {
+  display: block;
+
+  max-width: 190px;
+
+  overflow: hidden;
+
+  color: #737983;
+
+  font-size: 11px;
+  font-weight: 400;
+
+  line-height: 1.25;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.profile:hover .username {
-  color: #df5b2b;
+
+/* =========================================
+   DROPDOWN DIVIDER
+   ========================================= */
+
+.profile-dropdown-divider {
+  width: 100%;
+  height: 1px;
+
+  margin: 15px 0;
+
+  background: #eceef1;
+}
+
+
+/* =========================================
+   ACCOUNT STATUS
+   ========================================= */
+
+.profile-dropdown-account {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 9px 10px;
+
+  border-radius: 7px;
+
+  background: #f7f9fb;
+
+  color: #737983;
+
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.profile-status-dot {
+  width: 7px;
+  height: 7px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: #2e7d32;
+
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.10);
 }
 
 
@@ -1206,7 +1437,20 @@ code {
   .percent {
     font-size: 0.68rem;
   }
+
+  .profile-wrapper {
+    margin-left: 16px;
+  }
+
+  .profile .username {
+    max-width: 90px;
+  }
 }
+
+
+/* =========================================
+   TABLET
+   ========================================= */
 
 @media (max-width: 800px) {
   .dashboard-container {
@@ -1249,6 +1493,8 @@ code {
     height: 58px;
 
     min-height: 58px;
+
+    overflow: visible;
   }
 
   .indices-container {
@@ -1261,6 +1507,16 @@ code {
     width: 64%;
 
     flex-basis: 64%;
+
+    overflow: visible;
+  }
+
+  .menus {
+    overflow: visible;
+  }
+
+  .profile-wrapper {
+    margin-left: 12px;
   }
 
   .profile .username {
@@ -1268,7 +1524,13 @@ code {
   }
 
   .profile {
-    margin-left: 12px;
+    margin-left: 0;
+  }
+
+  .profile-dropdown {
+    width: 260px;
+
+    right: 0;
   }
 
   .row {
@@ -1283,6 +1545,11 @@ code {
     flex-basis: auto;
   }
 }
+
+
+/* =========================================
+   MOBILE
+   ========================================= */
 
 @media (max-width: 560px) {
   .content {
@@ -1339,6 +1606,27 @@ code {
   .index-points,
   .percent {
     display: none;
+  }
+
+  .profile-wrapper {
+    margin-left: 6px;
+  }
+
+  .profile {
+    padding: 4px 5px;
+  }
+
+  .profile-dropdown {
+    width: min(280px, calc(100vw - 28px));
+
+    right: -5px;
+
+    padding: 14px;
+  }
+
+  .profile-dropdown-user strong,
+  .profile-dropdown-user span {
+    max-width: 180px;
   }
 
   .watchlist-number ul li {

@@ -1,42 +1,90 @@
 import React, { useEffect, useState } from "react";
-
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 const Menu = () => {
-  const [selectedMenu, setSelectedMenu] = useState(0);
-  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [user, setUser] = useState({ name: "User", email: "" });
+  const location = useLocation();
 
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] =
+    useState(false);
+
+  const [user, setUser] = useState({
+    name: "User",
+    email: "",
+  });
+
+  /*
+   * Load user saved during login/signup.
+   */
   useEffect(() => {
-    const token = localStorage.getItem("stockifyToken");
-    const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:3008";
+    const storedUser = localStorage.getItem("stockifyUser");
 
-    if (!token) {
+    if (!storedUser) {
       return;
     }
 
-    const loadUser = async () => {
-      try {
-        const response = await fetch(`${apiUrl}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const result = await response.json();
+    try {
+      const parsedUser = JSON.parse(storedUser);
 
-        if (!response.ok) {
-          throw new Error(result.message);
-        }
+      const name =
+        parsedUser?.name ||
+        parsedUser?.username ||
+        parsedUser?.fullName ||
+        "";
 
-        setUser(result.data);
-        localStorage.setItem("stockifyUser", JSON.stringify(result.data));
-      } catch (error) {
-        console.error("Unable to load profile:", error.message);
-      }
-    };
+      const email = parsedUser?.email || "";
 
-    loadUser();
+      setUser({
+        name: name || "User",
+        email,
+      });
+    } catch (error) {
+      console.error("Unable to read stored user:", error);
+    }
   }, []);
 
-  const initials = user.name
+  /*
+   * Determine active menu item.
+   */
+  const getActiveMenu = () => {
+    switch (location.pathname) {
+      case "/":
+        return 0;
+
+      case "/orders":
+        return 1;
+
+      case "/holdings":
+        return 2;
+
+      case "/positions":
+        return 3;
+
+      case "/funds":
+        return 4;
+
+      case "/apps":
+        return 6;
+
+      default:
+        return 0;
+    }
+  };
+
+  const selectedMenu = getActiveMenu();
+
+  /*
+   * Open / close profile popup.
+   */
+  const handleProfileClick = () => {
+    setIsProfileDropdownOpen((current) => !current);
+  };
+
+  const displayName = user.name || "User";
+
+  /*
+   * Generate initials.
+   */
+  const initials = displayName
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -44,94 +92,206 @@ const Menu = () => {
     .join("")
     .toUpperCase();
 
-  const handleMenuClick = (index) => {
-    setSelectedMenu(index);
-  };
-
-  const handleProfileClick = (index) => {
-    setIsProfileDropdownOpen(!isProfileDropdownOpen);
-  };
-
   const menuClass = "menu";
   const activeMenuClass = "menu selected";
 
   return (
     <div className="menu-container">
-      <img src="logo.png" alt="Stockify" style={{ width: "50px" }} />
+
+      {/* LOGO */}
+      <img
+        src="/logo.png"
+        alt="Stockify"
+        style={{ width: "50px" }}
+      />
+
       <div className="menus">
+
+        {/* NAVIGATION */}
         <ul>
+
+          {/* DASHBOARD */}
           <li>
             <Link
-              style={{ textDecoration: "none" }}
               to="/"
-              onClick={() => handleMenuClick(0)}
+              style={{ textDecoration: "none" }}
             >
-              <p className={selectedMenu === 0 ? activeMenuClass : menuClass}>
+              <p
+                className={
+                  selectedMenu === 0
+                    ? activeMenuClass
+                    : menuClass
+                }
+              >
                 Dashboard
               </p>
             </Link>
           </li>
+
+          {/* ORDERS */}
           <li>
             <Link
-              style={{ textDecoration: "none" }}
               to="/orders"
-              onClick={() => handleMenuClick(1)}
+              style={{ textDecoration: "none" }}
             >
-              <p className={selectedMenu === 1 ? activeMenuClass : menuClass}>
+              <p
+                className={
+                  selectedMenu === 1
+                    ? activeMenuClass
+                    : menuClass
+                }
+              >
                 Orders
               </p>
             </Link>
           </li>
+
+          {/* HOLDINGS */}
           <li>
             <Link
-              style={{ textDecoration: "none" }}
               to="/holdings"
-              onClick={() => handleMenuClick(2)}
+              style={{ textDecoration: "none" }}
             >
-              <p className={selectedMenu === 2 ? activeMenuClass : menuClass}>
+              <p
+                className={
+                  selectedMenu === 2
+                    ? activeMenuClass
+                    : menuClass
+                }
+              >
                 Holdings
               </p>
             </Link>
           </li>
+
+          {/* POSITIONS */}
           <li>
             <Link
-              style={{ textDecoration: "none" }}
               to="/positions"
-              onClick={() => handleMenuClick(3)}
+              style={{ textDecoration: "none" }}
             >
-              <p className={selectedMenu === 3 ? activeMenuClass : menuClass}>
+              <p
+                className={
+                  selectedMenu === 3
+                    ? activeMenuClass
+                    : menuClass
+                }
+              >
                 Positions
               </p>
             </Link>
           </li>
+
+          {/* FUNDS */}
           <li>
             <Link
-              style={{ textDecoration: "none" }}
               to="/funds"
-              onClick={() => handleMenuClick(4)}
+              style={{ textDecoration: "none" }}
             >
-              <p className={selectedMenu === 4 ? activeMenuClass : menuClass}>
+              <p
+                className={
+                  selectedMenu === 4
+                    ? activeMenuClass
+                    : menuClass
+                }
+              >
                 Funds
               </p>
             </Link>
           </li>
+
+          {/* APPS */}
           <li>
             <Link
-              style={{ textDecoration: "none" }}
               to="/apps"
-              onClick={() => handleMenuClick(6)}
+              style={{ textDecoration: "none" }}
             >
-              <p className={selectedMenu === 6 ? activeMenuClass : menuClass}>
+              <p
+                className={
+                  selectedMenu === 6
+                    ? activeMenuClass
+                    : menuClass
+                }
+              >
                 Apps
               </p>
             </Link>
           </li>
+
         </ul>
+
         <hr />
-        <div className="profile" onClick={handleProfileClick} title={user.email}>
-          <div className="avatar">{initials || "U"}</div>
-          <p className="username">{user.name}</p>
+
+        {/* PROFILE */}
+        <div className="profile-wrapper">
+
+          <div
+            className="profile"
+            onClick={handleProfileClick}
+            title={user.email || displayName}
+          >
+
+            {/* PROFILE AVATAR */}
+            <div className="avatar">
+              {initials || "U"}
+            </div>
+
+            {/* PROFILE NAME */}
+            <p className="username">
+              {displayName}
+            </p>
+
+            {/* ARROW */}
+            <span className="profile-arrow">
+              {isProfileDropdownOpen ? "▲" : "▼"}
+            </span>
+
+          </div>
+
+          {/* PROFILE DROPDOWN */}
+          {isProfileDropdownOpen && (
+            <div className="profile-dropdown">
+
+              {/* HEADER */}
+              <div className="profile-dropdown-header">
+
+                <div className="profile-dropdown-avatar">
+                  {initials || "U"}
+                </div>
+
+                <div className="profile-dropdown-user">
+
+                  <strong>
+                    {displayName}
+                  </strong>
+
+                  <span>
+                    {user.email || "No email available"}
+                  </span>
+
+                </div>
+
+              </div>
+
+              {/* DIVIDER */}
+              <div className="profile-dropdown-divider" />
+
+              {/* ACCOUNT STATUS */}
+              <div className="profile-dropdown-account">
+
+                <span className="profile-status-dot" />
+
+                <span>
+                  Account Active
+                </span>
+
+              </div>
+
+            </div>
+          )}
+
         </div>
+
       </div>
     </div>
   );

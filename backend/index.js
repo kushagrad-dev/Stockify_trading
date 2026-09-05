@@ -1,66 +1,111 @@
-const authRoutes = require("./routes/authRoutes");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "../.env") });
+require("dotenv").config({
+  path: path.join(__dirname, "../.env"),
+});
 
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
+
 const { HoldingsModel } = require("./models/HoldingsModel");
 const { OrdersModel } = require("./models/OrdersModel");
 const { PositionsModel } = require("./models/PositionsModel");
+const authRoutes = require("./routes/authRoutes");
+
 const app = express();
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PORT = 3008;
+const MONGO_URL = process.env.MONGO_URL;
 
-// =======================
-// Middleware
-// =======================
+/// ======================================================
+// CORS
+// ======================================================
 
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  ...(process.env.CLIENT_ORIGIN || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  "http://10.98.206.93:3000",
+  "http://10.98.206.93:3001",
 ];
 
 app.use(
   cors({
-    origin(origin, callback) {
-      // Requests made outside a browser do not include an Origin header.
-      if (!origin || allowedOrigins.includes(origin)) {
+    origin: function (origin, callback) {
+      // Allow requests without an Origin header
+      // (Postman, curl, server-to-server, etc.)
+      if (!origin) {
         return callback(null, true);
       }
 
-      return callback(new Error("Origin is not allowed by CORS"));
+      // Allow our frontend and dashboard
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.log("Blocked CORS origin:", origin);
+
+      // Don't crash the backend for unknown origins
+      return callback(null, false);
     },
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
+
+    credentials: false,
   })
 );
 
-app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true }));
+
+// ======================================================
+// BODY PARSERS
+// ======================================================
+
+app.use(
+  express.json({
+    limit: "10kb",
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+  })
+);
+
+// ======================================================
+// AUTH ROUTES
+// ======================================================
+
 app.use("/auth", authRoutes);
 
-// =======================
-// Basic Route
-// =======================
+// ======================================================
+// BASIC ROUTE
+// ======================================================
 
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     success: true,
     message: "Stockify backend is running",
   });
 });
 
-
-// =======================
-// Authentication Middleware
-// =======================
+// ======================================================
+// AUTHENTICATION MIDDLEWARE
+// ======================================================
 
 const requireAuthentication = (req, res, next) => {
-
   const authorization = req.headers.authorization || "";
 
   const token = authorization.startsWith("Bearer ")
@@ -75,9 +120,15 @@ const requireAuthentication = (req, res, next) => {
   }
 
   try {
-    req.auth = jwt.verify(token, process.env.JWT_SECRET);
+    req.auth = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
     return next();
   } catch (error) {
+    console.error("JWT verification error:", error);
+
     return res.status(401).json({
       success: false,
       message: "Your session is invalid or has expired",
@@ -85,11 +136,9 @@ const requireAuthentication = (req, res, next) => {
   }
 };
 
-
-
-// =======================
-// Add Sample Positions
-// =======================
+// ======================================================
+// ADD SAMPLE POSITIONS
+// ======================================================
 
 app.get("/addPositions", async (req, res) => {
   const tempPositions = [
@@ -116,9 +165,8 @@ app.get("/addPositions", async (req, res) => {
   ];
 
   try {
-    const positions = await PositionsModel.insertMany(
-      tempPositions
-    );
+    const positions =
+      await PositionsModel.insertMany(tempPositions);
 
     return res.status(201).json({
       success: true,
@@ -126,7 +174,10 @@ app.get("/addPositions", async (req, res) => {
       data: positions,
     });
   } catch (error) {
-    console.error("Error adding positions:", error);
+    console.error(
+      "Error adding positions:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -136,9 +187,9 @@ app.get("/addPositions", async (req, res) => {
   }
 });
 
-// =======================
-// Get All Positions
-// =======================
+// ======================================================
+// GET ALL POSITIONS
+// ======================================================
 
 app.get("/allpositions", async (req, res) => {
   try {
@@ -149,7 +200,10 @@ app.get("/allpositions", async (req, res) => {
       data: positions,
     });
   } catch (error) {
-    console.error("Error fetching positions:", error);
+    console.error(
+      "Error fetching positions:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -159,12 +213,17 @@ app.get("/allpositions", async (req, res) => {
   }
 });
 
-// =======================
-// Add BUY Order
-// =======================
+// ======================================================
+// ADD BUY ORDER
+// ======================================================
 
 app.post("/addOrders", async (req, res) => {
-  const { name, qty, price, mode } = req.body;
+  const {
+    name,
+    qty,
+    price,
+    mode,
+  } = req.body;
 
   const quantity = Number(qty);
   const orderPrice = Number(price);
@@ -176,14 +235,21 @@ app.post("/addOrders", async (req, res) => {
     });
   }
 
-  if (!Number.isInteger(quantity) || quantity <= 0) {
+  if (
+    !Number.isInteger(quantity) ||
+    quantity <= 0
+  ) {
     return res.status(400).json({
       success: false,
-      message: "Quantity must be a positive whole number",
+      message:
+        "Quantity must be a positive whole number",
     });
   }
 
-  if (!Number.isFinite(orderPrice) || orderPrice <= 0) {
+  if (
+    !Number.isFinite(orderPrice) ||
+    orderPrice <= 0
+  ) {
     return res.status(400).json({
       success: false,
       message: "A valid stock price is required",
@@ -208,7 +274,10 @@ app.post("/addOrders", async (req, res) => {
       data: savedOrder,
     });
   } catch (error) {
-    console.error("Error adding order:", error);
+    console.error(
+      "Error adding order:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -217,15 +286,23 @@ app.post("/addOrders", async (req, res) => {
     });
   }
 });
-// =======================
-// Sell Order
-// =======================
+
+// ======================================================
+// SELL ORDER
+// ======================================================
+
 app.post("/sellOrder", async (req, res) => {
-  const { name, qty, price } = req.body;
+  const {
+    name,
+    qty,
+    price,
+  } = req.body;
 
   try {
-    // Validate input
-    if (typeof name !== "string" || !name.trim()) {
+    if (
+      typeof name !== "string" ||
+      !name.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: "Stock name is required",
@@ -235,26 +312,38 @@ app.post("/sellOrder", async (req, res) => {
     const quantity = Number(qty);
     const sellPrice = Number(price);
 
-    if (!Number.isInteger(quantity) || quantity <= 0) {
+    if (
+      !Number.isInteger(quantity) ||
+      quantity <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Quantity must be a positive whole number",
+        message:
+          "Quantity must be a positive whole number",
       });
     }
 
-    if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
+    if (
+      !Number.isFinite(sellPrice) ||
+      sellPrice <= 0
+    ) {
       return res.status(400).json({
         success: false,
         message: "Price must be greater than 0",
       });
     }
 
-    const stockName = name.trim().toUpperCase();
+    const stockName = name
+      .trim()
+      .toUpperCase();
 
-    // Find the holding
-    const holding = await HoldingsModel.findOne({
-      name: new RegExp(`^${stockName}$`, "i"),
-    });
+    const holding =
+      await HoldingsModel.findOne({
+        name: new RegExp(
+          `^${stockName}$`,
+          "i"
+        ),
+      });
 
     if (!holding) {
       return res.status(404).json({
@@ -263,9 +352,9 @@ app.post("/sellOrder", async (req, res) => {
       });
     }
 
-    const ownedQuantity = Number(holding.qty) || 0;
+    const ownedQuantity =
+      Number(holding.qty) || 0;
 
-    // Check available quantity
     if (quantity > ownedQuantity) {
       return res.status(400).json({
         success: false,
@@ -275,9 +364,9 @@ app.post("/sellOrder", async (req, res) => {
       });
     }
 
-    const remainingQuantity = ownedQuantity - quantity;
+    const remainingQuantity =
+      ownedQuantity - quantity;
 
-    // Create SELL order
     const newOrder = new OrdersModel({
       name: stockName,
       qty: quantity,
@@ -285,18 +374,15 @@ app.post("/sellOrder", async (req, res) => {
       mode: "SELL",
     });
 
-    const savedOrder = await newOrder.save();
+    const savedOrder =
+      await newOrder.save();
 
-    // IMPORTANT:
-    // Actually update the holding in MongoDB
     if (remainingQuantity === 0) {
       await HoldingsModel.deleteOne({
         _id: holding._id,
       });
     } else {
       holding.qty = remainingQuantity;
-
-      // Keep the current market price
       holding.price = sellPrice;
 
       await holding.save();
@@ -313,7 +399,10 @@ app.post("/sellOrder", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error selling stock:", error);
+    console.error(
+      "Error selling stock:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -323,22 +412,26 @@ app.post("/sellOrder", async (req, res) => {
   }
 });
 
-// =======================
-// Fetch Orders
-// =======================
+// ======================================================
+// FETCH ORDERS
+// ======================================================
 
 app.get("/orders", async (req, res) => {
   try {
-    const orders = await OrdersModel.find({}).sort({
-      _id: -1,
-    });
+    const orders =
+      await OrdersModel.find({}).sort({
+        _id: -1,
+      });
 
     return res.status(200).json({
       success: true,
       data: orders,
     });
   } catch (error) {
-    console.error("Error fetching orders:", error);
+    console.error(
+      "Error fetching orders:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -348,20 +441,24 @@ app.get("/orders", async (req, res) => {
   }
 });
 
-// =======================
-// Get All Holdings
-// =======================
+// ======================================================
+// GET ALL HOLDINGS
+// ======================================================
 
 app.get("/allholdings", async (req, res) => {
   try {
-    const holdings = await HoldingsModel.find({});
+    const holdings =
+      await HoldingsModel.find({});
 
     return res.status(200).json({
       success: true,
       data: holdings,
     });
   } catch (error) {
-    console.error("Error fetching holdings:", error);
+    console.error(
+      "Error fetching holdings:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
@@ -371,40 +468,59 @@ app.get("/allholdings", async (req, res) => {
   }
 });
 
-// =======================
-// Environment Variables
-// =======================
+// ======================================================
+// GLOBAL ERROR HANDLER
+// ======================================================
 
-const PORT = 3008;
-const MONGO_URL = process.env.MONGO_URL;
+app.use((error, req, res, next) => {
+  console.error("Server error:", error);
 
-// =======================
-// Start Server
-// =======================
+  return res.status(500).json({
+    success: false,
+    message: "Internal server error",
+  });
+});
+
+// ======================================================
+// START SERVER
+// ======================================================
 
 const startServer = async () => {
   try {
     if (!MONGO_URL) {
-      console.error("MONGO_URL is missing in .env");
+      console.error(
+        "MONGO_URL is missing in .env"
+      );
       process.exit(1);
     }
 
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is missing in .env");
+      console.error(
+        "JWT_SECRET is missing in .env"
+      );
       process.exit(1);
     }
 
     await mongoose.connect(MONGO_URL);
 
-    console.log("MongoDB connected successfully");
+    console.log(
+      "MongoDB connected successfully"
+    );
 
-    app.listen(PORT, () => {
-      console.log(
-        `Stockify backend running on http://localhost:${PORT}`
-      );
-    });
+    app.listen(
+      PORT,
+      "0.0.0.0",
+      () => {
+        console.log(
+          `Stockify backend running on http://10.98.206.93:${PORT}`
+        );
+      }
+    );
   } catch (error) {
-    console.error("MongoDB connection failed:");
+    console.error(
+      "MongoDB connection failed:"
+    );
+
     console.error(error.message);
 
     process.exit(1);

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { API_URL, DASHBOARD_URL } from "../../config/api";
+const API_URL = "http://10.98.206.93:3008";
+const DASHBOARD_URL = "http://10.98.206.93:3001";
 
 function SignUp() {
   const [formData, setFormData] = useState({
