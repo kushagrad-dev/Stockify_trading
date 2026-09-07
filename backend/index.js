@@ -19,7 +19,7 @@ const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
-const PORT = 3008;
+const PORT = process.env.PORT || 3008;
 const MONGO_URL = process.env.MONGO_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -31,6 +31,9 @@ const allowedOrigins = [
   "http://10.137.184.93:3000",
   "http://10.137.184.93:3001",
   "http://10.137.184.93:3002",
+
+  "https://stockifyy-frontend.netlify.app",
+  "https://stockify-dashboard.netlify.app",
 ];
 
 app.use(

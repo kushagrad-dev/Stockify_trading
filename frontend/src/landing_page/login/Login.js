@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const API_URL = "http://10.137.184.93:3008";
-const DASHBOARD_URL = "http://10.137.184.93:3001";
+const API_URL = "https://stockify-backend-1cud.onrender.com";
+const DASHBOARD_URL = "https://stockify-dashboard.netlify.app";
 
 const Login = () => {
   const [email, setEmail] = useState("");
