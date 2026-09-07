@@ -1,266 +1,273 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-const API_URL = "http://10.98.206.93:3008";
-const DASHBOARD_URL = "http://10.98.206.93:3001";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
-function SignUp() {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-  });
+const API_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:3008";
 
-  const [status, setStatus] = useState({
-    type: "",
-    message: "",
-  });
+const Signup = () => {
+  const navigate = useNavigate();
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-
-    setFormData((currentData) => ({
-      ...currentData,
-      [name]: value,
-    }));
-  };
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    setStatus({
-      type: "",
-      message: "",
-    });
+    setError("");
 
-    const trimmedName = formData.name.trim();
-    const trimmedEmail = formData.email.trim().toLowerCase();
-
-    // Validate name
-    if (trimmedName.length < 2) {
-      setStatus({
-        type: "danger",
-        message: "Enter your name.",
-      });
-
+    if (!name || !email || !password) {
+      setError("All fields are required.");
       return;
     }
 
-    // Validate email
-    if (!trimmedEmail) {
-      setStatus({
-        type: "danger",
-        message: "Enter your email address.",
-      });
-
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
       return;
     }
 
-    // Validate password
-    if (formData.password.length < 8) {
-      setStatus({
-        type: "danger",
-        message: "Password must be at least 8 characters.",
-      });
-
-      return;
-    }
-
-    setIsSubmitting(true);
+    setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/auth/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: trimmedName,
-          email: trimmedEmail,
-          password: formData.password,
-        }),
-      });
-
-      const result = await response.json().catch(() => ({}));
-
-      // Backend returned an error
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Unable to create your account."
-        );
-      }
-
-      // Make sure backend returned token and user
-      if (!result.token || !result.user) {
-        console.error("Invalid signup response:", result);
-
-        throw new Error(
-          "Signup response is missing user or token."
-        );
-      }
-
-      // Save authentication token
-      localStorage.setItem(
-        "stockifyToken",
-        result.token
+      const response = await axios.post(
+        `${API_URL}/signup`,
+        {
+          name,
+          email,
+          password,
+        }
       );
 
-      // Save logged-in user
+      const user = response?.data?.user;
+
+      if (!user) {
+        setError("Signup failed.");
+        return;
+      }
+
       localStorage.setItem(
         "stockifyUser",
-        JSON.stringify(result.user)
+        JSON.stringify(user)
       );
 
-      // Success message
-      setStatus({
-        type: "success",
-        message: `Welcome to Stockify, ${
-          result.user.name || "User"
-        }! Opening your dashboard…`,
-      });
+      navigate("/");
+    } catch (err) {
+      console.error("Signup error:", err);
 
-      // Redirect to dashboard
-      window.location.assign(DASHBOARD_URL);
-    } catch (error) {
-      console.error("Signup error:", error);
-
-      setStatus({
-        type: "danger",
-        message:
-          error.message ||
-          "Unable to reach the server. Please try again.",
-      });
+      setError(
+        err?.response?.data?.message ||
+          "Unable to create account. Please try again."
+      );
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <main className="container py-5 mt-5">
-      <div className="row justify-content-center">
-        <div className="col-md-7 col-lg-5">
-          <div className="card shadow-sm border-0">
-            <div className="card-body p-4 p-md-5">
+    <div className="stockify-auth-page">
+      <style>{`
+        .stockify-auth-page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          background: #f8fafc;
+          color: #202124;
+          font-family:
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            Roboto,
+            Arial,
+            sans-serif;
+        }
 
-              <h1 className="h2 mb-2">
-                Create your Stockify account
-              </h1>
+        .stockify-auth-card {
+          width: min(400px, 100%);
+          padding: 28px;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          background: #ffffff;
+          box-shadow:
+            0 8px 30px rgba(0, 0, 0, 0.06);
+        }
 
-              <p className="text-muted mb-4">
-                Start investing with Stockify. Already
-                have an account?{" "}
-                <Link to="/login">
-                  Log in
-                </Link>
-              </p>
+        .stockify-auth-kicker {
+          margin: 0 0 6px;
+          color: #387ed1;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: .14em;
+        }
 
-              {status.message && (
-                <div
-                  className={`alert alert-${status.type}`}
-                  role="alert"
-                >
-                  {status.message}
-                </div>
-              )}
+        .stockify-auth-title {
+          margin: 0;
+          font-size: 25px;
+          font-weight: 600;
+        }
 
-              <form
-                onSubmit={handleSubmit}
-                noValidate
-              >
+        .stockify-auth-subtitle {
+          margin: 7px 0 24px;
+          color: #737983;
+          font-size: 12px;
+        }
 
-                {/* NAME */}
-                <div className="mb-3">
-                  <label
-                    className="form-label"
-                    htmlFor="name"
-                  >
-                    Full name
-                  </label>
+        .stockify-auth-field {
+          margin-bottom: 15px;
+        }
 
-                  <input
-                    className="form-control"
-                    id="name"
-                    name="name"
-                    type="text"
-                    autoComplete="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    minLength="2"
-                    maxLength="80"
-                    disabled={isSubmitting}
-                  />
-                </div>
+        .stockify-auth-label {
+          display: block;
+          margin-bottom: 7px;
+          color: #555b64;
+          font-size: 11px;
+          font-weight: 600;
+        }
 
-                {/* EMAIL */}
-                <div className="mb-3">
-                  <label
-                    className="form-label"
-                    htmlFor="email"
-                  >
-                    Email address
-                  </label>
+        .stockify-auth-input {
+          width: 100%;
+          height: 43px;
+          padding: 0 12px;
+          border: 1px solid #dfe3e8;
+          border-radius: 8px;
+          outline: none;
+          background: #fff;
+          color: #202124;
+          font-size: 13px;
+        }
 
-                  <input
-                    className="form-control"
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
+        .stockify-auth-input:focus {
+          border-color: #387ed1;
+          box-shadow:
+            0 0 0 3px rgba(56, 126, 209, .1);
+        }
 
-                {/* PASSWORD */}
-                <div className="mb-4">
-                  <label
-                    className="form-label"
-                    htmlFor="password"
-                  >
-                    Password
-                  </label>
+        .stockify-auth-error {
+          margin: 0 0 15px;
+          padding: 10px 12px;
+          border: 1px solid #f0d5d5;
+          border-radius: 7px;
+          background: #fff7f7;
+          color: #c43d43;
+          font-size: 10px;
+          line-height: 1.45;
+        }
 
-                  <input
-                    className="form-control"
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    minLength="8"
-                    disabled={isSubmitting}
-                  />
+        .stockify-auth-button {
+          width: 100%;
+          height: 43px;
+          border: 0;
+          border-radius: 8px;
+          background: #387ed1;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
 
-                  <div className="form-text">
-                    Use at least 8 characters.
-                  </div>
-                </div>
+        .stockify-auth-button:disabled {
+          cursor: not-allowed;
+          opacity: .55;
+        }
+      `}</style>
 
-                {/* SIGNUP BUTTON */}
-                <button
-                  className="btn btn-primary w-100"
-                  type="submit"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting
-                    ? "Creating account…"
-                    : "Create account"}
-                </button>
+      <form
+        className="stockify-auth-card"
+        onSubmit={handleSubmit}
+      >
+        <p className="stockify-auth-kicker">
+          STOCKIFY
+        </p>
 
-              </form>
+        <h1 className="stockify-auth-title">
+          Create account
+        </h1>
 
-            </div>
-          </div>
+        <p className="stockify-auth-subtitle">
+          Create your Stockify trading account.
+        </p>
+
+        <div className="stockify-auth-field">
+          <label
+            className="stockify-auth-label"
+            htmlFor="stockify-signup-name"
+          >
+            Name
+          </label>
+
+          <input
+            id="stockify-signup-name"
+            className="stockify-auth-input"
+            type="text"
+            value={name}
+            onChange={(event) =>
+              setName(event.target.value)
+            }
+            autoComplete="name"
+          />
         </div>
-      </div>
-    </main>
-  );
-}
 
-export default SignUp;
+        <div className="stockify-auth-field">
+          <label
+            className="stockify-auth-label"
+            htmlFor="stockify-signup-email"
+          >
+            Email
+          </label>
+
+          <input
+            id="stockify-signup-email"
+            className="stockify-auth-input"
+            type="email"
+            value={email}
+            onChange={(event) =>
+              setEmail(event.target.value)
+            }
+            autoComplete="email"
+          />
+        </div>
+
+        <div className="stockify-auth-field">
+          <label
+            className="stockify-auth-label"
+            htmlFor="stockify-signup-password"
+          >
+            Password
+          </label>
+
+          <input
+            id="stockify-signup-password"
+            className="stockify-auth-input"
+            type="password"
+            value={password}
+            onChange={(event) =>
+              setPassword(event.target.value)
+            }
+            autoComplete="new-password"
+          />
+        </div>
+
+        {error && (
+          <p className="stockify-auth-error">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className="stockify-auth-button"
+          disabled={isLoading}
+        >
+          {isLoading ? "Creating account..." : "Sign up"}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default Signup;

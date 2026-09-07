@@ -577,7 +577,6 @@ const WatchList = () => {
 export default WatchList;
 
 const WatchListItem = ({ stock }) => {
-  const [showActions, setShowActions] = useState(false);
 
   const formattedPrice = Number(
     stock.price || 0
@@ -591,8 +590,7 @@ const WatchListItem = ({ stock }) => {
   return (
     <li
       className="stockify-watchlist-row"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      
     >
 
       <div className="stockify-watchlist-stock">
@@ -633,9 +631,7 @@ const WatchListItem = ({ stock }) => {
 
       </div>
 
-      {showActions && (
-        <WatchListActions uid={stock.name} />
-      )}
+      <WatchListActions uid={stock.name} />
 
     </li>
   );

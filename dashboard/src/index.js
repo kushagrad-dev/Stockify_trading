@@ -1,5 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import axios from "axios";
+import WatchList from "./components/WatchList";
+import { GeneralContextProvider } from "./components/GeneralContext";
 import {
   BrowserRouter,
   Routes,
@@ -18,10 +21,130 @@ import Positions from "./components/Positions";
 import Funds from "./components/Funds";
 import Apps from "./components/Apps";
 
+const FRONTEND_URL = "http://10.137.184.93:3000";
+const LOGIN_URL = `${FRONTEND_URL}/login`;
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("stockifyToken");
 
-// ======================================================
-// DASHBOARD LAYOUT
-// ======================================================
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+
+/*
+ * ======================================================
+ * RECEIVE LOGIN DATA FROM FRONTEND
+ * ======================================================
+ */
+
+const receiveLoginData = () => {
+  try {
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
+    const auth = params.get("auth");
+
+    if (!auth) {
+      return;
+    }
+
+    const decoded = JSON.parse(
+      atob(decodeURIComponent(auth))
+    );
+
+    const token = decoded?.token;
+    const user = decoded?.user;
+
+    if (!token || !user) {
+      console.error(
+        "Invalid authentication data received."
+      );
+      return;
+    }
+
+    localStorage.setItem(
+      "stockifyToken",
+      token
+    );
+
+    localStorage.setItem(
+      "stockifyUser",
+      JSON.stringify(user)
+    );
+
+    console.log(
+      "Stockify login successful:",
+      user
+    );
+
+    /*
+     * Remove the authentication data from
+     * the browser URL.
+     */
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+
+  } catch (error) {
+    console.error(
+      "Unable to receive login data:",
+      error
+    );
+  }
+};
+
+
+/*
+ * ======================================================
+ * PROCESS LOGIN DATA FIRST
+ * ======================================================
+ */
+
+receiveLoginData();
+
+
+/*
+ * ======================================================
+ * PROTECTED ROUTE
+ * ======================================================
+ */
+
+const ProtectedRoute = () => {
+  const token = localStorage.getItem(
+    "stockifyToken"
+  );
+
+  const user = localStorage.getItem(
+    "stockifyUser"
+  );
+
+  /*
+   * Both token and user information are required.
+   */
+  if (!token || !user) {
+    window.location.replace(LOGIN_URL);
+
+    return null;
+  }
+
+  return <Outlet />;
+};
+
+
+/*
+ * ======================================================
+ * DASHBOARD LAYOUT
+ * ======================================================
+ */
 
 const DashboardLayout = () => {
   return (
@@ -36,111 +159,91 @@ const DashboardLayout = () => {
 };
 
 
-// ======================================================
-// REACT APP
-// ======================================================
+/*
+ * ======================================================
+ * REACT ROOT
+ * ======================================================
+ */
 
 const root = ReactDOM.createRoot(
   document.getElementById("root")
 );
 
-const userData = new URLSearchParams(
-  window.location.hash.slice(1)
-).get("user");
-
-if (userData) {
-  try {
-    const user = JSON.parse(
-      decodeURIComponent(userData)
-    );
-
-    localStorage.setItem(
-      "stockifyUser",
-      JSON.stringify(user)
-    );
-
-    window.history.replaceState(
-      {},
-      document.title,
-      window.location.pathname
-    );
-  } catch (error) {
-    console.error(
-      "Unable to load logged-in user:",
-      error
-    );
-  }
-}
-
-
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
+    <GeneralContextProvider>
 
-      <Routes>
+      <BrowserRouter>
 
-        {/* ==============================================
-            ALL DASHBOARD PAGES
-            TopBar remains visible on every page
-        ============================================== */}
+        <Routes>
 
-        <Route element={<DashboardLayout />}>
+          {/* ==========================================
+              PROTECTED DASHBOARD
+              ========================================== */}
 
-          {/* Dashboard */}
+          <Route element={<ProtectedRoute />}>
+
+            <Route
+              element={<DashboardLayout />}
+            >
+
+              <Route
+                path="/"
+                element={<Summary />}
+              />
+              <Route
+              path="/watchlist"
+              element={<WatchList />}
+              />
+
+              <Route
+                path="/orders"
+                element={<Orders />}
+              />
+
+              <Route
+                path="/holdings"
+                element={<Holdings />}
+              />
+
+              <Route
+                path="/positions"
+                element={<Positions />}
+              />
+
+              <Route
+                path="/funds"
+                element={<Funds />}
+              />
+
+              <Route
+                path="/apps"
+                element={<Apps />}
+              />
+
+            </Route>
+
+          </Route>
+
+
+          {/* ==========================================
+              UNKNOWN ROUTES
+              ========================================== */}
+
           <Route
-            path="/"
-            element={<Summary />}
+            path="*"
+            element={
+              <Navigate
+                to="/"
+                replace
+              />
+            }
           />
 
-          {/* Orders */}
-          <Route
-            path="/orders"
-            element={<Orders />}
-          />
+        </Routes>
 
-          {/* Holdings */}
-          <Route
-            path="/holdings"
-            element={<Holdings />}
-          />
+      </BrowserRouter>
 
-          {/* Positions */}
-          <Route
-            path="/positions"
-            element={<Positions />}
-          />
-
-          {/* Funds */}
-          <Route
-            path="/funds"
-            element={<Funds />}
-          />
-
-          {/* Apps */}
-          <Route
-            path="/apps"
-            element={<Apps />}
-          />
-
-        </Route>
-
-
-        {/* ==============================================
-            UNKNOWN URL
-        ============================================== */}
-
-        <Route
-          path="*"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
-        />
-
-      </Routes>
-
-    </BrowserRouter>
+    </GeneralContextProvider>
   </React.StrictMode>
 );

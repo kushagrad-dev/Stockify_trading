@@ -21,10 +21,18 @@ const UserSchema = new Schema(
       required: true,
       select: false,
     },
+
+    balance: {
+      type: Number,
+      default: 100000,
+      min: 0,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-module.exports = { UserSchema };
+module.exports = {
+  UserSchema,
+};

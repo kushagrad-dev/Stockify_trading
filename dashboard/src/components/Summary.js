@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { holdings } from "../data/data";
+import VerticalGraph from "./VerticalGraph";
 
 const formatCurrency = (value) => {
   const amount = Number(value) || 0;
@@ -32,28 +33,19 @@ const formatCompactCurrency = (value) => {
 const Summary = () => {
   const storedUser = localStorage.getItem("stockifyUser");
 
-  let user = null;
+  const user = storedUser
+    ? JSON.parse(storedUser)
+    : null;
 
-  try {
-    user = storedUser ? JSON.parse(storedUser) : null;
-  } catch (error) {
-    console.error("Unable to read stored user:", error);
-    user = null;
-  }
-
-  const userName =
-    user?.name?.trim() ||
-    user?.username?.trim() ||
-    "User";
+  const userName = user?.name || "User";
 
   const openingBalance = Number(user?.balance) || 0;
 
-  // LOGOUT
   const handleLogout = () => {
     localStorage.removeItem("stockifyToken");
     localStorage.removeItem("stockifyUser");
 
-    window.location.replace("http://10.98.206.93:3000/login");
+    window.location.replace("http://10.137.184.93:3000/login");
   };
 
   const portfolio = useMemo(() => {
@@ -111,6 +103,27 @@ const Summary = () => {
           100
         )
       : 0;
+
+  const graphData = useMemo(() => {
+    const sortedPortfolio = [...portfolio]
+      .sort((a, b) => b.currentValue - a.currentValue)
+      .slice(0, 5);
+
+    return {
+      labels: sortedPortfolio.map(
+        (stock) => stock.name || "Unknown"
+      ),
+      datasets: [
+        {
+          label: "Current Value",
+          data: sortedPortfolio.map(
+            (stock) => stock.currentValue
+          ),
+          backgroundColor: "#387ed1",
+        },
+      ],
+    };
+  }, [portfolio]);
 
   return (
     <main className="stockify-summary-page">
@@ -510,6 +523,10 @@ const Summary = () => {
           line-height: 1.5;
         }
 
+        .stockify-summary-graph {
+          margin-top: 20px;
+        }
+
         @media (max-width: 1000px) {
           .stockify-summary-panels {
             grid-template-columns: 1fr;
@@ -590,7 +607,6 @@ const Summary = () => {
         }
       `}</style>
 
-      {/* HEADER */}
       <header className="stockify-summary-header">
         <div className="stockify-summary-header-copy">
           <p className="stockify-summary-eyebrow">
@@ -622,7 +638,6 @@ const Summary = () => {
         </div>
       </header>
 
-      {/* SUMMARY CARDS */}
       <section className="stockify-summary-cards">
         <div className="stockify-summary-card primary">
           <span className="stockify-summary-card-label">
@@ -673,9 +688,7 @@ const Summary = () => {
         </div>
       </section>
 
-      {/* MAIN PANELS */}
       <section className="stockify-summary-panels">
-        {/* EQUITY PANEL */}
         <div className="stockify-summary-panel">
           <div className="stockify-summary-panel-header">
             <h2 className="stockify-summary-panel-title">
@@ -746,7 +759,6 @@ const Summary = () => {
             </div>
           </div>
 
-          {/* P&L */}
           <div className="stockify-summary-pnl-section">
             <p className="stockify-summary-pnl-label">
               Total portfolio P&amp;L
@@ -767,7 +779,6 @@ const Summary = () => {
             </h3>
           </div>
 
-          {/* HOLDINGS HEADER */}
           <div className="stockify-summary-panel-header">
             <h2 className="stockify-summary-panel-title">
               Top holdings
@@ -778,7 +789,6 @@ const Summary = () => {
             </span>
           </div>
 
-          {/* HOLDINGS LIST */}
           <ul
             style={{
               margin: 0,
@@ -819,9 +829,12 @@ const Summary = () => {
               </li>
             )}
           </ul>
+
+          <div className="stockify-summary-graph">
+            <VerticalGraph data={graphData} />
+          </div>
         </div>
 
-        {/* PORTFOLIO OVERVIEW */}
         <aside className="stockify-summary-panel">
           <div className="stockify-summary-panel-header">
             <h2 className="stockify-summary-panel-title">

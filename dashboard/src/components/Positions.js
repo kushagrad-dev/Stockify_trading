@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:3008";
+const API_URL = (
+  process.env.REACT_APP_API_URL || "http://localhost:3008"
+).replace(/\/+$/, "");
 
 const formatCurrency = (value) =>
-  `₹${Number(value).toLocaleString("en-IN", {
+  `₹${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -14,35 +16,79 @@ const Positions = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchPositions = async () => {
       try {
         setLoading(true);
         setError("");
 
-        const response = await fetch(`${API_URL}/allpositions`);
-        const result = await response.json();
+        const token = localStorage.getItem("stockifyToken");
 
-        if (!response.ok || !result.success) {
+        if (!token) {
+          throw new Error("Authentication required. Please log in again.");
+        }
+
+        const response = await fetch(`${API_URL}/allpositions`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        let result = {};
+
+        try {
+          result = await response.json();
+        } catch {
+          result = {};
+        }
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem("stockifyToken");
+            throw new Error("Session expired. Please log in again.");
+          }
+
+          throw new Error(
+            result.message ||
+              `Failed to fetch positions (${response.status})`
+          );
+        }
+
+        if (!result.success) {
           throw new Error(
             result.message || "Failed to fetch positions"
           );
         }
 
-        setPositions(
-          Array.isArray(result.data) ? result.data : []
-        );
+        if (isMounted) {
+          setPositions(
+            Array.isArray(result.data) ? result.data : []
+          );
+        }
       } catch (err) {
         console.error("Error fetching positions:", err);
-        setError(
-          err.message || "Failed to fetch positions"
-        );
-        setPositions([]);
+
+        if (isMounted) {
+          setError(
+            err.message || "Failed to fetch positions"
+          );
+          setPositions([]);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchPositions();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const totals = positions.reduce(
@@ -404,8 +450,6 @@ const Positions = () => {
       `}</style>
 
       <main className="stockify-positions-page">
-
-        {/* Header */}
         <header className="stockify-positions-header">
           <div>
             <p className="stockify-positions-kicker">
@@ -434,9 +478,7 @@ const Positions = () => {
           </div>
         </header>
 
-        {/* Summary */}
         <section className="stockify-positions-summary">
-
           <div className="stockify-positions-summary-card">
             <span className="stockify-positions-summary-label">
               Invested value
@@ -498,12 +540,9 @@ const Positions = () => {
               Open positions
             </small>
           </div>
-
         </section>
 
-        {/* Positions Table */}
         <section className="stockify-positions-card">
-
           <div className="stockify-positions-card-header">
             <h2 className="stockify-positions-card-heading">
               Open positions
@@ -529,9 +568,7 @@ const Positions = () => {
             </div>
           ) : (
             <div className="stockify-positions-table-wrap">
-
               <table className="stockify-positions-table">
-
                 <thead>
                   <tr>
                     <th>PRODUCT</th>
@@ -552,9 +589,7 @@ const Positions = () => {
 
                     const investedValue = avg * qty;
                     const currentValue = price * qty;
-
-                    const pnl =
-                      currentValue - investedValue;
+                    const pnl = currentValue - investedValue;
 
                     const isProfit = pnl >= 0;
 
@@ -563,11 +598,12 @@ const Positions = () => {
                         ? (pnl / investedValue) * 100
                         : 0;
 
-                    const dayChange =
-                      String(stock.day || "0%");
+                    const dayChange = String(
+                      stock.day || "0%"
+                    );
 
                     const dayIsLoss =
-                      stock.isLoss ||
+                      Boolean(stock.isLoss) ||
                       dayChange.trim().startsWith("-");
 
                     return (
@@ -576,7 +612,7 @@ const Positions = () => {
                       >
                         <td>
                           <span className="stockify-positions-product">
-                            {stock.product}
+                            {stock.product || "CNC"}
                           </span>
                         </td>
 
@@ -639,34 +675,31 @@ const Positions = () => {
                     );
                   })}
                 </tbody>
-
               </table>
             </div>
           )}
 
-          {positions.length > 0 && !loading && !error && (
-            <div className="stockify-positions-footer">
+          {positions.length > 0 &&
+            !loading &&
+            !error && (
+              <div className="stockify-positions-footer">
+                <span>
+                  Current position value:{" "}
+                  <strong>
+                    {formatCurrency(totals.current)}
+                  </strong>
+                </span>
 
-              <span>
-                Current position value:{" "}
-                <strong>
-                  {formatCurrency(totals.current)}
-                </strong>
-              </span>
-
-              <span>
-                Overall P&amp;L:{" "}
-                <strong>
-                  {isOverallProfit ? "+" : ""}
-                  {formatCurrency(totals.pnl)}
-                </strong>
-              </span>
-
-            </div>
-          )}
-
+                <span>
+                  Overall P&amp;L:{" "}
+                  <strong>
+                    {isOverallProfit ? "+" : ""}
+                    {formatCurrency(totals.pnl)}
+                  </strong>
+                </span>
+              </div>
+            )}
         </section>
-
       </main>
     </>
   );

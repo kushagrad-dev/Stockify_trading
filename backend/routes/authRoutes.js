@@ -5,25 +5,31 @@ const { UserModel } = require("../models/User");
 
 const router = express.Router();
 
-// =========================
+// ======================================================
 // SIGN UP
-// =========================
+// ======================================================
+
 router.post("/signup", async (req, res) => {
   try {
     const { name, username, email, password } = req.body;
 
-    // Support both name and username
-    const userName = (name || username || "").trim();
+    const userName = String(name || username || "").trim();
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
 
-    if (!userName || !email || !password) {
+    if (!userName || !normalizedEmail || !password) {
       return res.status(400).json({
         message: "Name, email and password are required",
       });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters",
+      });
+    }
 
-    // Check if account already exists
     const existingUser = await UserModel.findOne({
       email: normalizedEmail,
     });
@@ -34,18 +40,17 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user with ₹0 balance
     const user = await UserModel.create({
       name: userName,
       email: normalizedEmail,
       password: hashedPassword,
-      balance: 0,
+
+      // New Stockify account starts with ₹1,00,000
+      balance: 100000,
     });
 
-    // Create JWT
     const secret = process.env.JWT_SECRET;
 
     if (!secret) {
@@ -86,9 +91,10 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// =========================
+// ======================================================
 // LOGIN
-// =========================
+// ======================================================
+
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -101,10 +107,11 @@ router.post("/login", async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Find user
+    // Password is select:false in UserSchema,
+    // so explicitly request it for authentication.
     const user = await UserModel.findOne({
       email: normalizedEmail,
-    });
+    }).select("+password");
 
     if (!user) {
       return res.status(401).json({
@@ -112,7 +119,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Check password
     const passwordMatch = await bcrypt.compare(
       password,
       user.password
@@ -134,7 +140,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Create JWT
     const token = jwt.sign(
       {
         userId: user._id.toString(),
@@ -165,9 +170,10 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// =========================
+// ======================================================
 // LOGOUT
-// =========================
+// ======================================================
+
 router.post("/logout", (req, res) => {
   return res.status(200).json({
     message: "Logout successful",
