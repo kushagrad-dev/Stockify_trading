@@ -10,17 +10,19 @@ const API_URL =
 const BuyActionWindow = ({ uid, mode = "BUY" }) => {
   const generalContext = useContext(GeneralContext);
 
-  const isSellMode = mode === "SELL";
+  const isSellMode = String(mode).toUpperCase() === "SELL";
 
-  const selectedStock = useMemo(
-    () =>
-      watchlist.find(
-        (stock) =>
-          String(stock.name).toUpperCase() ===
-          String(uid).toUpperCase()
-      ),
-    [uid]
-  );
+  const selectedStock = useMemo(() => {
+    if (!Array.isArray(watchlist)) {
+      return null;
+    }
+
+    return watchlist.find(
+      (stock) =>
+        String(stock?.name || "").toUpperCase() ===
+        String(uid || "").toUpperCase()
+    );
+  }, [uid]);
 
   const currentStockPrice = Number(selectedStock?.price) || 0;
 
@@ -33,42 +35,113 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // ==========================================
-  // GET HOLDING WHEN SELL WINDOW OPENS
-  // ==========================================
+  // ======================================================
+  // GET JWT TOKEN
+  // ======================================================
+
+  const getAuthToken = () => {
+    return localStorage.getItem("stockifyToken");
+  };
+
+  // ======================================================
+  // AUTH HEADERS
+  // ======================================================
+
+  const getAuthConfig = () => {
+    const token = getAuthToken();
+
+    if (!token) {
+      return null;
+    }
+
+    return {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    };
+  };
+
+  // ======================================================
+  // CHECK LOGIN
+  // ======================================================
+
   useEffect(() => {
-    if (!isSellMode || !uid) return;
+    const token = getAuthToken();
+
+    if (!token) {
+      setError("Please login before placing an order.");
+    }
+  }, []);
+
+  // ======================================================
+  // GET HOLDING WHEN SELL WINDOW OPENS
+  // ======================================================
+
+  useEffect(() => {
+    if (!isSellMode || !uid) {
+      return;
+    }
 
     const fetchHolding = async () => {
       setIsLoadingHolding(true);
+      setOwnedQuantity(null);
       setError("");
 
+      const token = getAuthToken();
+
+      if (!token) {
+        setOwnedQuantity(0);
+        setError("Please login before selling shares.");
+        setIsLoadingHolding(false);
+        return;
+      }
+
       try {
+        const config = getAuthConfig();
+
         const response = await axios.get(
-          `${API_URL}/allholdings`
+          `${API_URL}/allholdings`,
+          config
         );
 
-        const holdings = response?.data?.data || [];
+        const holdings = Array.isArray(response?.data?.data)
+          ? response.data.data
+          : [];
 
         const holding = holdings.find(
           (item) =>
-            String(item.name).toUpperCase() ===
-            String(uid).toUpperCase()
+            String(item?.name || "").toUpperCase() ===
+            String(uid || "").toUpperCase()
         );
 
         if (!holding) {
           setOwnedQuantity(0);
           setError(`You do not own any ${uid} shares.`);
         } else {
-          setOwnedQuantity(Number(holding.qty) || 0);
+          const quantity = Number(holding.qty) || 0;
+
+          setOwnedQuantity(quantity);
+
+          if (quantity <= 0) {
+            setError(`You do not own any ${uid} shares.`);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch holding:", err);
 
-        setError(
-          err?.response?.data?.message ||
-            "Unable to check your holdings."
-        );
+        if (err?.response?.status === 401) {
+          setOwnedQuantity(0);
+          setError(
+            "Your session has expired. Please login again."
+          );
+        } else {
+          setOwnedQuantity(0);
+          setError(
+            err?.response?.data?.message ||
+              "Unable to check your holdings."
+          );
+        }
       } finally {
         setIsLoadingHolding(false);
       }
@@ -77,9 +150,10 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     fetchHolding();
   }, [uid, isSellMode]);
 
-  // ==========================================
+  // ======================================================
   // TOTAL ORDER VALUE
-  // ==========================================
+  // ======================================================
+
   const marginRequired = useMemo(() => {
     const quantity = Number(stockQuantity) || 0;
     const price = Number(stockPrice) || 0;
@@ -87,14 +161,29 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     return quantity * price;
   }, [stockQuantity, stockPrice]);
 
-  // ==========================================
+  // ======================================================
   // BUY / SELL
-  // ==========================================
+  // ======================================================
+
   const handleActionClick = async () => {
     const quantity = Number(stockQuantity);
     const price = Number(stockPrice);
 
-    // Quantity validation
+    // ----------------------------------------------------
+    // AUTHENTICATION
+    // ----------------------------------------------------
+
+    const token = getAuthToken();
+
+    if (!token) {
+      setError("Please login before placing an order.");
+      return;
+    }
+
+    // ----------------------------------------------------
+    // QUANTITY VALIDATION
+    // ----------------------------------------------------
+
     if (!Number.isFinite(quantity) || quantity <= 0) {
       setError("Please enter a valid quantity.");
       return;
@@ -105,15 +194,28 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
       return;
     }
 
-    // Price validation
+    // ----------------------------------------------------
+    // PRICE VALIDATION
+    // ----------------------------------------------------
+
     if (!Number.isFinite(price) || price <= 0) {
       setError("Current stock price is not available.");
       return;
     }
 
-    // ==========================================
+    // ----------------------------------------------------
+    // STOCK VALIDATION
+    // ----------------------------------------------------
+
+    if (!selectedStock) {
+      setError(`Stock ${uid || ""} could not be found.`);
+      return;
+    }
+
+    // ----------------------------------------------------
     // SELL VALIDATION
-    // ==========================================
+    // ----------------------------------------------------
+
     if (isSellMode) {
       if (ownedQuantity === null) {
         setError("Please wait while we check your holdings.");
@@ -139,35 +241,59 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     setIsSubmitting(true);
 
     try {
-      // ==========================================
+      const config = getAuthConfig();
+
+      if (!config) {
+        setError("Please login before placing an order.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // ==================================================
       // SELL ORDER
-      // ==========================================
+      // ==================================================
+
       if (isSellMode) {
-        await axios.post(`${API_URL}/sellOrder`, {
-          name: uid,
-          qty: quantity,
-          price: price,
-        });
+        await axios.post(
+          `${API_URL}/sellOrder`,
+          {
+            name: uid,
+            qty: quantity,
+            price: price,
+          },
+          config
+        );
       }
 
-      // ==========================================
+      // ==================================================
       // BUY ORDER
-      // ==========================================
+      // ==================================================
+
       else {
-        await axios.post(`${API_URL}/addOrders`, {
-          name: uid,
-          qty: quantity,
-          price: price,
-          mode: "BUY",
-        });
+        await axios.post(
+          `${API_URL}/addOrders`,
+          {
+            name: uid,
+            qty: quantity,
+            price: price,
+            mode: "BUY",
+          },
+          config
+        );
       }
 
-      // Close modal
+      // ==================================================
+      // CLOSE WINDOW
+      // ==================================================
+
       if (generalContext?.closeBuyWindow) {
         generalContext.closeBuyWindow();
       }
 
-      // Refresh dashboard so holdings/orders update
+      // ==================================================
+      // REFRESH DASHBOARD
+      // ==================================================
+
       window.location.reload();
     } catch (err) {
       console.error(
@@ -177,20 +303,27 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
         err
       );
 
-      setError(
-        err?.response?.data?.message ||
-          `Unable to place the ${
-            isSellMode ? "sell" : "buy"
-          } order. Please check that the backend is running.`
-      );
+      if (err?.response?.status === 401) {
+        setError(
+          "Your session has expired. Please login again."
+        );
+      } else {
+        setError(
+          err?.response?.data?.message ||
+            `Unable to place the ${
+              isSellMode ? "sell" : "buy"
+            } order.`
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ==========================================
+  // ======================================================
   // CANCEL
-  // ==========================================
+  // ======================================================
+
   const handleCancelClick = () => {
     if (
       !isSubmitting &&
@@ -200,23 +333,41 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     }
   };
 
-  // ==========================================
+  // ======================================================
   // FORMATTING
-  // ==========================================
-  const formattedPrice = Number(
-    stockPrice || 0
-  ).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  // ======================================================
 
-  const formattedTotal = marginRequired.toLocaleString(
+  const formattedPrice = Number(stockPrice || 0).toLocaleString(
     "en-IN",
     {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }
   );
+
+  const formattedTotal = Number(marginRequired || 0).toLocaleString(
+    "en-IN",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
+
+  // ======================================================
+  // BUTTON STATE
+  // ======================================================
+
+  const isActionDisabled =
+    isSubmitting ||
+    isLoadingHolding ||
+    !selectedStock ||
+    !getAuthToken() ||
+    (isSellMode &&
+      (ownedQuantity === null || ownedQuantity <= 0));
+
+  // ======================================================
+  // UI
+  // ======================================================
 
   return (
     <div className="stockify-buy-overlay">
@@ -556,22 +707,19 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
           </div>
 
           {/* OWNED QUANTITY */}
-          {isSellMode &&
-            ownedQuantity !== null && (
-              <p className="stockify-buy-holding">
-                Available to sell:{" "}
-                <strong>{ownedQuantity}</strong>{" "}
-                share
-                {ownedQuantity === 1 ? "" : "s"}
-              </p>
-            )}
+          {isSellMode && ownedQuantity !== null && (
+            <p className="stockify-buy-holding">
+              Available to sell:{" "}
+              <strong>{ownedQuantity}</strong>{" "}
+              share{ownedQuantity === 1 ? "" : "s"}
+            </p>
+          )}
 
           {/* STOCK NOT FOUND */}
           {!selectedStock && (
             <p className="stockify-buy-error">
               Current price for{" "}
-              {uid || "this stock"} could not be
-              found.
+              {uid || "this stock"} could not be found.
             </p>
           )}
 
@@ -604,12 +752,9 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
 
         {/* FOOTER */}
         <div className="stockify-buy-footer">
-
           <div className="stockify-buy-margin">
             <span className="stockify-buy-margin-label">
-              {isSellMode
-                ? "Sell value"
-                : "Margin required"}
+              {isSellMode ? "Sell value" : "Margin required"}
             </span>
 
             <span className="stockify-buy-margin-value">
@@ -618,7 +763,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
           </div>
 
           <div className="stockify-buy-actions">
-
             {/* CANCEL */}
             <button
               type="button"
@@ -636,24 +780,18 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
                 isSellMode ? "sell" : "buy"
               }`}
               onClick={handleActionClick}
-              disabled={
-                isSubmitting ||
-                isLoadingHolding ||
-                !selectedStock ||
-                (isSellMode &&
-                  (ownedQuantity === null ||
-                    ownedQuantity <= 0))
-              }
+              disabled={isActionDisabled}
             >
               {isSubmitting
                 ? isSellMode
                   ? "Selling..."
                   : "Placing..."
+                : isLoadingHolding
+                ? "Checking..."
                 : isSellMode
                 ? "Sell"
                 : "Buy"}
             </button>
-
           </div>
         </div>
       </div>

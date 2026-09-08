@@ -72,7 +72,6 @@ app.use(
   })
 );
 
-
 // ======================================================
 // BODY PARSERS
 // ======================================================
@@ -88,7 +87,6 @@ app.use(
     extended: true,
   })
 );
-
 
 // ======================================================
 // JWT AUTHENTICATION MIDDLEWARE
@@ -137,13 +135,11 @@ const requireAuthentication = (req, res, next) => {
   }
 };
 
-
 // ======================================================
 // AUTH ROUTES
 // ======================================================
 
 app.use("/auth", authRoutes);
-
 
 // ======================================================
 // BASIC ROUTE
@@ -155,7 +151,6 @@ app.get("/", (req, res) => {
     message: "Stockify backend is running",
   });
 });
-
 
 // ======================================================
 // DIRECT SIGNUP
@@ -248,7 +243,6 @@ app.post("/signup", async (req, res) => {
     });
   }
 });
-
 
 // ======================================================
 // DIRECT LOGIN
@@ -347,7 +341,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-
 // ======================================================
 // GET ALL POSITIONS
 // ======================================================
@@ -385,7 +378,6 @@ app.get(
   }
 );
 
-
 // ======================================================
 // GET ORDERS
 // ======================================================
@@ -421,7 +413,6 @@ app.get(
     }
   }
 );
-
 
 // ======================================================
 // GET ALL HOLDINGS
@@ -459,7 +450,6 @@ app.get(
     }
   }
 );
-
 
 // ======================================================
 // ADD BUY ORDER
@@ -518,6 +508,31 @@ app.post(
           .trim()
           .toUpperCase();
 
+      const user =
+        await UserModel.findById(
+          req.auth.userId
+        );
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const totalOrderValue =
+        quantity * orderPrice;
+
+      if (
+        user.balance < totalOrderValue
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Insufficient funds. Available balance: ₹${user.balance.toLocaleString("en-IN")}`,
+        });
+      }
+
       // ==================================================
       // CREATE ORDER
       // ==================================================
@@ -527,11 +542,14 @@ app.post(
           userId:
             req.auth.userId,
 
-          name: stockName,
+          name:
+            stockName,
 
-          qty: quantity,
+          qty:
+            quantity,
 
-          price: orderPrice,
+          price:
+            orderPrice,
 
           mode:
             mode || "BUY",
@@ -543,13 +561,16 @@ app.post(
       console.log(
         "BUY ORDER CREATED:",
         {
-          userId: req.auth.userId,
+          userId:
+            req.auth.userId,
+
           stockName,
+
           quantity,
+
           orderPrice,
         }
       );
-
 
       // ==================================================
       // FIND EXISTING HOLDING
@@ -566,7 +587,6 @@ app.post(
           ),
         });
 
-
       // ==================================================
       // CREATE / UPDATE HOLDING
       // ==================================================
@@ -577,17 +597,23 @@ app.post(
             userId:
               req.auth.userId,
 
-            name: stockName,
+            name:
+              stockName,
 
-            qty: quantity,
+            qty:
+              quantity,
 
-            avg: orderPrice,
+            avg:
+              orderPrice,
 
-            price: orderPrice,
+            price:
+              orderPrice,
 
-            net: "0",
+            net:
+              "0",
 
-            day: "0%",
+            day:
+              "0%",
           });
       } else {
         const oldQty =
@@ -626,7 +652,6 @@ app.post(
 
       await holding.save();
 
-
       // ==================================================
       // CREATE / UPDATE POSITION
       // ==================================================
@@ -641,7 +666,6 @@ app.post(
             "i"
           ),
         });
-
 
       if (!position) {
         position =
@@ -713,6 +737,14 @@ app.post(
 
       await position.save();
 
+      // ==================================================
+      // DEDUCT PURCHASE AMOUNT FROM USER BALANCE
+      // ==================================================
+
+      user.balance -=
+        totalOrderValue;
+
+      await user.save();
 
       // ==================================================
       // SUCCESS
@@ -733,6 +765,9 @@ app.post(
 
           position:
             position,
+
+          balance:
+            user.balance,
         },
       });
 
@@ -751,7 +786,6 @@ app.post(
     }
   }
 );
-
 
 // ======================================================
 // SELL ORDER
@@ -812,6 +846,17 @@ app.post(
           .trim()
           .toUpperCase();
 
+      const user =
+        await UserModel.findById(
+          req.auth.userId
+        );
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
       // ==================================================
       // FIND HOLDING
@@ -836,7 +881,6 @@ app.post(
         });
       }
 
-
       // ==================================================
       // CHECK QUANTITY
       // ==================================================
@@ -859,7 +903,6 @@ app.post(
         });
       }
 
-
       // ==================================================
       // FIND POSITION
       // ==================================================
@@ -874,7 +917,6 @@ app.post(
             "i"
           ),
         });
-
 
       // ==================================================
       // CREATE SELL ORDER
@@ -900,9 +942,6 @@ app.post(
 
       const savedOrder =
         await newOrder.save();
-      
-      
-
 
       // ==================================================
       // CALCULATE REMAINING QUANTITY
@@ -910,7 +949,6 @@ app.post(
 
       const remainingQuantity =
         ownedQuantity - quantity;
-
 
       // ==================================================
       // REMOVE / UPDATE HOLDING
@@ -938,7 +976,6 @@ app.post(
 
         await holding.save();
       }
-
 
       // ==================================================
       // REMOVE / UPDATE POSITION
@@ -969,6 +1006,17 @@ app.post(
         }
       }
 
+      // ==================================================
+      // ADD SALE PROCEEDS BACK TO USER BALANCE
+      // ==================================================
+
+      const totalSellValue =
+        quantity * sellPrice;
+
+      user.balance +=
+        totalSellValue;
+
+      await user.save();
 
       // ==================================================
       // SUCCESS
@@ -989,6 +1037,9 @@ app.post(
             savedOrder,
 
           remainingQuantity,
+
+          balance:
+            user.balance,
         },
       });
 
@@ -1007,7 +1058,6 @@ app.post(
     }
   }
 );
-
 
 // ======================================================
 // GET CURRENT USER
@@ -1032,6 +1082,7 @@ app.get(
 
       return res.status(200).json({
         success: true,
+
         user: {
           id:
             user._id,
@@ -1061,7 +1112,6 @@ app.get(
   }
 );
 
-
 // ======================================================
 // GLOBAL ERROR HANDLER
 // ======================================================
@@ -1081,14 +1131,12 @@ app.use(
   }
 );
 
-
 // ======================================================
 // START SERVER
 // ======================================================
 
 const startServer = async () => {
   try {
-
     // -----------------------------------------------
     // CHECK MONGO URL
     // -----------------------------------------------
@@ -1100,7 +1148,6 @@ const startServer = async () => {
 
       process.exit(1);
     }
-
 
     // -----------------------------------------------
     // CHECK JWT SECRET
@@ -1114,7 +1161,6 @@ const startServer = async () => {
       process.exit(1);
     }
 
-
     // -----------------------------------------------
     // CONNECT MONGODB
     // -----------------------------------------------
@@ -1126,7 +1172,6 @@ const startServer = async () => {
     console.log(
       "MongoDB connected successfully"
     );
-
 
     // -----------------------------------------------
     // START SERVER
@@ -1143,7 +1188,6 @@ const startServer = async () => {
     );
 
   } catch (error) {
-
     console.error(
       "MongoDB connection failed:"
     );
@@ -1155,7 +1199,6 @@ const startServer = async () => {
     process.exit(1);
   }
 };
-
 
 // ======================================================
 // START
