@@ -64,8 +64,8 @@ const Funds = () => {
               })
             );
           } catch (storageError) {
-            console.warn(
-              "Could not update stored user:",
+            console.error(
+              "Failed to update stored user:",
               storageError
             );
           }
@@ -79,66 +79,55 @@ const Funds = () => {
         err
       );
 
-      setError(
-        err?.response?.data?.message ||
-          "Unable to load your funds."
-      );
+      if (err?.response?.status === 401) {
+        setError(
+          "Your session has expired. Please login again."
+        );
+      } else {
+        setError(
+          err?.response?.data?.message ||
+            "Unable to load your funds."
+        );
+      }
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   // ==================================================
-  // INITIAL LOAD + REFRESH AFTER BUY / SELL
+  // INITIAL LOAD + BUY/SELL REFRESH
   // ==================================================
 
   useEffect(() => {
-    // Fetch when Funds page opens.
     fetchUserBalance();
 
-    /*
-      BuyActionWindow should dispatch:
+    const handleBalanceUpdated = () => {
+      fetchUserBalance();
+    };
 
-      window.dispatchEvent(
-        new Event("stockifyBalanceUpdated")
-      );
-
-      after a successful BUY or SELL.
-
-      This listener makes the Funds page immediately
-      display the new balance.
-    */
-    const handleBalanceUpdate = () => {
+    const handleDataUpdated = () => {
       fetchUserBalance();
     };
 
     window.addEventListener(
       "stockifyBalanceUpdated",
-      handleBalanceUpdate
+      handleBalanceUpdated
     );
 
-    /*
-      Also refresh whenever the browser tab becomes active.
-      This handles cases where a trade happened elsewhere.
-    */
-    const handleFocus = () => {
-      fetchUserBalance();
-    };
-
     window.addEventListener(
-      "focus",
-      handleFocus
+      "stockify:data-updated",
+      handleDataUpdated
     );
 
     return () => {
       window.removeEventListener(
         "stockifyBalanceUpdated",
-        handleBalanceUpdate
+        handleBalanceUpdated
       );
 
       window.removeEventListener(
-        "focus",
-        handleFocus
+        "stockify:data-updated",
+        handleDataUpdated
       );
     };
   }, [fetchUserBalance]);
@@ -146,16 +135,6 @@ const Funds = () => {
   // ==================================================
   // CALCULATIONS
   // ==================================================
-
-  /*
-    Backend balance already accounts for:
-
-    BUY  -> balance decreases
-    SELL -> balance increases
-
-    Therefore DO NOT calculate available cash
-    from the holdings array.
-  */
 
   const availableCash = Math.max(balance, 0);
 
@@ -598,8 +577,6 @@ const Funds = () => {
 
       <main className="stockify-funds-page">
 
-        {/* HEADER */}
-
         <header className="stockify-funds-header">
           <div>
             <p className="stockify-funds-kicker">
@@ -632,15 +609,11 @@ const Funds = () => {
           </div>
         </header>
 
-        {/* ERROR */}
-
         {error && (
           <div className="stockify-funds-error">
             {error}
           </div>
         )}
-
-        {/* SUMMARY CARDS */}
 
         <section className="stockify-funds-summary">
 
@@ -694,11 +667,7 @@ const Funds = () => {
 
         </section>
 
-        {/* MAIN CONTENT */}
-
         <section className="stockify-funds-main">
-
-          {/* EQUITY CARD */}
 
           <article className="stockify-funds-card">
 
@@ -724,8 +693,6 @@ const Funds = () => {
                 </span>
               </div>
 
-              {/* MARGIN METER */}
-
               <div className="stockify-funds-meter">
 
                 <div className="stockify-funds-meter-top">
@@ -750,8 +717,6 @@ const Funds = () => {
                 </div>
 
               </div>
-
-              {/* BALANCE CARDS */}
 
               <div className="stockify-funds-key-grid">
 
@@ -780,8 +745,6 @@ const Funds = () => {
                 </div>
 
               </div>
-
-              {/* DETAILS */}
 
               <div className="stockify-funds-details">
 
@@ -814,8 +777,6 @@ const Funds = () => {
 
           </article>
 
-          {/* COMMODITY CARD */}
-
           <article className="stockify-funds-card stockify-funds-commodity">
 
             <div className="stockify-funds-commodity-inner">
@@ -839,9 +800,19 @@ const Funds = () => {
               </p>
 
               <div className="stockify-funds-benefits">
-                <span>✓ Market access</span>
-                <span>✓ Portfolio tracking</span>
-                <span>✓ Unified dashboard</span>
+
+                <span>
+                  ✓ Market access
+                </span>
+
+                <span>
+                  ✓ Portfolio tracking
+                </span>
+
+                <span>
+                  ✓ Unified dashboard
+                </span>
+
               </div>
 
               <Link

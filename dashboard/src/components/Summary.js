@@ -1,6 +1,9 @@
-import React, { useMemo } from "react";
-import { holdings } from "../data/data";
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import VerticalGraph from "./VerticalGraph";
+
+const API_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:3008";
 
 const formatCurrency = (value) => {
   const amount = Number(value) || 0;
@@ -31,32 +34,163 @@ const formatCompactCurrency = (value) => {
 };
 
 const Summary = () => {
-  const storedUser = localStorage.getItem("stockifyUser");
+  const [user, setUser] = useState(null);
+  const [holdings, setHoldings] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const user = storedUser
-    ? JSON.parse(storedUser)
-    : null;
+  /*
+   * Load the latest user + holdings data from the backend.
+   * This is important because BUY/SELL changes the database,
+   * not the static data.js holdings array.
+   */
+  const fetchSummaryData = async () => {
+    try {
+      const token = localStorage.getItem("stockifyToken");
+
+      if (!token) {
+        setUser(null);
+        setHoldings([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+
+      const config = {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      };
+
+      const [userResponse, holdingsResponse] =
+        await Promise.all([
+          axios.get(`${API_URL}/me`, config),
+          axios.get(`${API_URL}/allholdings`, config),
+        ]);
+
+      const latestUser =
+        userResponse?.data?.user || null;
+
+      const latestHoldings =
+        Array.isArray(holdingsResponse?.data?.data)
+          ? holdingsResponse.data.data
+          : [];
+
+      setUser(latestUser);
+      setHoldings(latestHoldings);
+
+      /*
+       * Keep localStorage user data synchronized too.
+       * Funds/Summary can therefore use the same latest balance.
+       */
+      if (latestUser) {
+        localStorage.setItem(
+          "stockifyUser",
+          JSON.stringify(latestUser)
+        );
+      }
+    } catch (err) {
+      console.error(
+        "Failed to fetch summary data:",
+        err
+      );
+
+      /*
+       * If the API fails, fall back to the cached user
+       * so the page does not completely break.
+       */
+      try {
+        const storedUser =
+          localStorage.getItem("stockifyUser");
+
+        setUser(
+          storedUser
+            ? JSON.parse(storedUser)
+            : null
+        );
+      } catch {
+        setUser(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSummaryData();
+
+    /*
+     * BuyActionWindow dispatches this event after
+     * every successful BUY/SELL.
+     */
+    const handleDataUpdated = () => {
+      fetchSummaryData();
+    };
+
+    const handleBalanceUpdated = () => {
+      fetchSummaryData();
+    };
+
+    window.addEventListener(
+      "stockify:data-updated",
+      handleDataUpdated
+    );
+
+    window.addEventListener(
+      "stockifyBalanceUpdated",
+      handleBalanceUpdated
+    );
+
+    /*
+     * Also refresh when the user returns to this tab.
+     */
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchSummaryData();
+      }
+    };
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "stockify:data-updated",
+        handleDataUpdated
+      );
+
+      window.removeEventListener(
+        "stockifyBalanceUpdated",
+        handleBalanceUpdated
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
+  }, []);
 
   const userName = user?.name || "User";
 
-  const openingBalance = Number(user?.balance) || 0;
+  const openingBalance =
+    Number(user?.balance) || 0;
 
-  const handleLogout = () => {
-    localStorage.removeItem("stockifyToken");
-    localStorage.removeItem("stockifyUser");
-
-    window.location.replace("http://10.137.184.93:3000/login");
-  };
-
+  /*
+   * Convert backend holdings into the format needed
+   * by the Summary calculations.
+   */
   const portfolio = useMemo(() => {
     if (!Array.isArray(holdings)) {
       return [];
     }
 
     return holdings.map((stock) => {
-      const qty = Number(stock.qty) || 0;
-      const avg = Number(stock.avg) || 0;
-      const price = Number(stock.price) || 0;
+      const qty = Number(stock?.qty) || 0;
+      const avg = Number(stock?.avg) || 0;
+      const price = Number(stock?.price) || 0;
 
       const investment = avg * qty;
       const currentValue = price * qty;
@@ -70,16 +204,26 @@ const Summary = () => {
         currentValue,
       };
     });
-  }, []);
+  }, [holdings]);
 
-  const totalInvestment = portfolio.reduce(
-    (total, stock) => total + stock.investment,
-    0
+  const totalInvestment = useMemo(
+    () =>
+      portfolio.reduce(
+        (total, stock) =>
+          total + stock.investment,
+        0
+      ),
+    [portfolio]
   );
 
-  const currentValue = portfolio.reduce(
-    (total, stock) => total + stock.currentValue,
-    0
+  const currentValue = useMemo(
+    () =>
+      portfolio.reduce(
+        (total, stock) =>
+          total + stock.currentValue,
+        0
+      ),
+    [portfolio]
   );
 
   const pnl = currentValue - totalInvestment;
@@ -89,24 +233,43 @@ const Summary = () => {
       ? (pnl / totalInvestment) * 100
       : 0;
 
-  const marginUsed = totalInvestment;
-
+  /*
+   * IMPORTANT:
+   *
+   * The backend balance is the actual cash balance.
+   * Do NOT calculate marginAvailable as:
+   *
+   * openingBalance - totalInvestment
+   *
+   * because avg*qty is the portfolio investment value,
+   * while the backend balance already reflects BUY/SELL.
+   */
   const marginAvailable = Math.max(
-    openingBalance - marginUsed,
+    openingBalance,
     0
   );
 
+  /*
+   * Portfolio investment is displayed as margin used.
+   */
+  const marginUsed = totalInvestment;
+
   const utilization =
-    openingBalance > 0
+    openingBalance + marginUsed > 0
       ? Math.min(
-          (marginUsed / openingBalance) * 100,
+          (marginUsed /
+            (openingBalance + marginUsed)) *
+            100,
           100
         )
       : 0;
 
   const graphData = useMemo(() => {
     const sortedPortfolio = [...portfolio]
-      .sort((a, b) => b.currentValue - a.currentValue)
+      .sort(
+        (a, b) =>
+          b.currentValue - a.currentValue
+      )
       .slice(0, 5);
 
     return {
@@ -124,6 +287,15 @@ const Summary = () => {
       ],
     };
   }, [portfolio]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("stockifyToken");
+    localStorage.removeItem("stockifyUser");
+
+    window.location.replace(
+      "/login"
+    );
+  };
 
   return (
     <main className="stockify-summary-page">
@@ -527,6 +699,11 @@ const Summary = () => {
           margin-top: 20px;
         }
 
+        .stockify-summary-loading {
+          color: #737983;
+          font-size: 12px;
+        }
+
         @media (max-width: 1000px) {
           .stockify-summary-panels {
             grid-template-columns: 1fr;
@@ -638,6 +815,12 @@ const Summary = () => {
         </div>
       </header>
 
+      {isLoading && (
+        <p className="stockify-summary-loading">
+          Updating portfolio...
+        </p>
+      )}
+
       <section className="stockify-summary-cards">
         <div className="stockify-summary-card primary">
           <span className="stockify-summary-card-label">
@@ -645,7 +828,9 @@ const Summary = () => {
           </span>
 
           <h2 className="stockify-summary-card-value">
-            {formatCompactCurrency(marginAvailable)}
+            {formatCompactCurrency(
+              marginAvailable
+            )}
           </h2>
 
           <small className="stockify-summary-card-note">
@@ -659,7 +844,9 @@ const Summary = () => {
           </span>
 
           <h2 className="stockify-summary-card-value">
-            {formatCompactCurrency(currentValue)}
+            {formatCompactCurrency(
+              currentValue
+            )}
           </h2>
 
           <small className="stockify-summary-card-note">
@@ -674,7 +861,9 @@ const Summary = () => {
 
           <h2 className="stockify-summary-card-value">
             {pnl >= 0 ? "+" : "-"}
-            {formatCompactCurrency(Math.abs(pnl))}
+            {formatCompactCurrency(
+              Math.abs(pnl)
+            )}
           </h2>
 
           <small
@@ -708,7 +897,9 @@ const Summary = () => {
                 </p>
 
                 <h3 className="stockify-summary-big-value">
-                  {formatCurrency(marginAvailable)}
+                  {formatCurrency(
+                    marginAvailable
+                  )}
                 </h3>
               </div>
 
@@ -717,15 +908,19 @@ const Summary = () => {
                   <span>Margins used</span>
 
                   <strong>
-                    {formatCurrency(marginUsed)}
+                    {formatCurrency(
+                      marginUsed
+                    )}
                   </strong>
                 </div>
 
                 <div className="stockify-summary-stat">
-                  <span>Opening balance</span>
+                  <span>Account balance</span>
 
                   <strong>
-                    {formatCurrency(openingBalance)}
+                    {formatCurrency(
+                      openingBalance
+                    )}
                   </strong>
                 </div>
 
@@ -733,7 +928,9 @@ const Summary = () => {
                   <span>Available cash</span>
 
                   <strong>
-                    {formatCurrency(marginAvailable)}
+                    {formatCurrency(
+                      marginAvailable
+                    )}
                   </strong>
                 </div>
               </div>
@@ -766,11 +963,15 @@ const Summary = () => {
 
             <h3
               className={`stockify-summary-pnl-value ${
-                pnl >= 0 ? "profit" : "loss"
+                pnl >= 0
+                  ? "profit"
+                  : "loss"
               }`}
             >
               {pnl >= 0 ? "+" : "-"}
-              {formatCompactCurrency(Math.abs(pnl))}
+              {formatCompactCurrency(
+                Math.abs(pnl)
+              )}
 
               <span className="stockify-summary-pnl-percent">
                 ({pnl >= 0 ? "+" : ""}
@@ -799,7 +1000,8 @@ const Summary = () => {
             {[...portfolio]
               .sort(
                 (a, b) =>
-                  b.currentValue - a.currentValue
+                  b.currentValue -
+                  a.currentValue
               )
               .slice(0, 5)
               .map((stock, index) => (
@@ -816,7 +1018,9 @@ const Summary = () => {
                   </span>
 
                   <span className="stockify-summary-holding-value">
-                    {formatCurrency(stock.currentValue)}
+                    {formatCurrency(
+                      stock.currentValue
+                    )}
                   </span>
                 </li>
               ))}
@@ -831,7 +1035,9 @@ const Summary = () => {
           </ul>
 
           <div className="stockify-summary-graph">
-            <VerticalGraph data={graphData} />
+            <VerticalGraph
+              data={graphData}
+            />
           </div>
         </div>
 
@@ -847,7 +1053,9 @@ const Summary = () => {
               <span>Investment</span>
 
               <strong>
-                {formatCurrency(totalInvestment)}
+                {formatCurrency(
+                  totalInvestment
+                )}
               </strong>
             </div>
 
@@ -855,7 +1063,9 @@ const Summary = () => {
               <span>Current value</span>
 
               <strong>
-                {formatCurrency(currentValue)}
+                {formatCurrency(
+                  currentValue
+                )}
               </strong>
             </div>
 
@@ -864,11 +1074,15 @@ const Summary = () => {
 
               <strong
                 className={
-                  pnl >= 0 ? "profit" : "loss"
+                  pnl >= 0
+                    ? "profit"
+                    : "loss"
                 }
               >
                 {pnl >= 0 ? "+" : "-"}
-                {formatCurrency(Math.abs(pnl))}
+                {formatCurrency(
+                  Math.abs(pnl)
+                )}
               </strong>
             </div>
 
@@ -877,7 +1091,9 @@ const Summary = () => {
 
               <strong
                 className={
-                  pnl >= 0 ? "profit" : "loss"
+                  pnl >= 0
+                    ? "profit"
+                    : "loss"
                 }
               >
                 {pnl >= 0 ? "+" : ""}
@@ -894,8 +1110,11 @@ const Summary = () => {
             </div>
 
             <div className="stockify-summary-note">
-              Your account balance is loaded from your
-              Stockify user account.
+              Your latest account balance and
+              holdings are loaded directly from
+              your Stockify account. The summary
+              automatically refreshes after every
+              successful buy or sell.
             </div>
           </div>
         </aside>
