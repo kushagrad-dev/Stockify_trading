@@ -62,6 +62,10 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     }
   }, []);
 
+  // ==================================================
+  // FETCH CURRENT HOLDING FOR SELL
+  // ==================================================
+
   useEffect(() => {
     if (!isSellMode || !uid) {
       return;
@@ -134,12 +138,20 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     fetchHolding();
   }, [uid, isSellMode]);
 
+  // ==================================================
+  // ORDER VALUE
+  // ==================================================
+
   const marginRequired = useMemo(() => {
     const quantity = Number(stockQuantity) || 0;
     const price = Number(stockPrice) || 0;
 
     return quantity * price;
   }, [stockQuantity, stockPrice]);
+
+  // ==================================================
+  // BUY / SELL
+  // ==================================================
 
   const handleActionClick = async () => {
     const quantity = Number(stockQuantity);
@@ -205,6 +217,10 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
         return;
       }
 
+      // ==================================================
+      // SELL
+      // ==================================================
+
       if (isSellMode) {
         await axios.post(
           `${API_URL}/sellOrder`,
@@ -216,7 +232,13 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
           },
           config
         );
-      } else {
+      }
+
+      // ==================================================
+      // BUY
+      // ==================================================
+
+      else {
         await axios.post(
           `${API_URL}/addOrders`,
           {
@@ -229,13 +251,41 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
         );
       }
 
+      /*
+       * IMPORTANT:
+       *
+       * Notify every page/component that depends on:
+       * - balance
+       * - holdings
+       * - orders
+       * - portfolio
+       *
+       * Funds.jsx listens for stockifyBalanceUpdated.
+       * Other dashboard components can listen for
+       * stockify:data-updated.
+       */
+
+      window.dispatchEvent(
+        new Event("stockifyBalanceUpdated")
+      );
+
+      window.dispatchEvent(
+        new Event("stockify:data-updated")
+      );
+
+      // Close modal first.
       if (generalContext?.closeBuyWindow) {
         generalContext.closeBuyWindow();
       }
 
-      window.dispatchEvent(new Event("stockify:data-updated"));
+      /*
+       * DO NOT use window.location.reload().
+       *
+       * Reloading was causing the React state/data flow to
+       * become inconsistent. Components should refresh their
+       * API data through the custom event above.
+       */
 
-      window.location.reload();
     } catch (err) {
       console.error(
         `Failed to place ${
@@ -261,6 +311,10 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     }
   };
 
+  // ==================================================
+  // CANCEL
+  // ==================================================
+
   const handleCancelClick = () => {
     if (
       !isSubmitting &&
@@ -270,21 +324,23 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     }
   };
 
-  const formattedPrice = Number(stockPrice || 0).toLocaleString(
-    "en-IN",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  );
+  // ==================================================
+  // FORMATTING
+  // ==================================================
 
-  const formattedTotal = Number(marginRequired || 0).toLocaleString(
-    "en-IN",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  );
+  const formattedPrice = Number(
+    stockPrice || 0
+  ).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const formattedTotal = Number(
+    marginRequired || 0
+  ).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
   const isActionDisabled =
     isSubmitting ||
@@ -669,7 +725,9 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
         <div className="stockify-buy-footer">
           <div className="stockify-buy-margin">
             <span className="stockify-buy-margin-label">
-              {isSellMode ? "Sell value" : "Margin required"}
+              {isSellMode
+                ? "Sell value"
+                : "Margin required"}
             </span>
 
             <span className="stockify-buy-margin-value">

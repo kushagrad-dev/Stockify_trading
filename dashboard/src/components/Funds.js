@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
@@ -22,89 +22,159 @@ const Funds = () => {
   // GET REAL USER BALANCE
   // ==================================================
 
-  useEffect(() => {
-    const fetchUserBalance = async () => {
-      try {
-        setIsLoading(true);
-        setError("");
+  const fetchUserBalance = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError("");
 
-        const token = localStorage.getItem("token");
+      const token = localStorage.getItem("stockifyToken");
 
-        if (!token) {
-          setError("Please login to view your funds.");
-          return;
-        }
-
-        const response = await axios.get(
-          `${API_URL}/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const userBalance =
-          Number(response?.data?.user?.balance);
-
-        if (Number.isFinite(userBalance)) {
-          setBalance(userBalance);
-        } else {
-          setError("Unable to read account balance.");
-        }
-      } catch (err) {
-        console.error(
-          "Failed to fetch user balance:",
-          err
-        );
-
-        setError(
-          err?.response?.data?.message ||
-            "Unable to load your funds."
-        );
-      } finally {
+      if (!token) {
+        setError("Please login to view your funds.");
         setIsLoading(false);
+        return;
       }
+
+      const response = await axios.get(`${API_URL}/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const userBalance = Number(
+        response?.data?.user?.balance
+      );
+
+      if (Number.isFinite(userBalance)) {
+        setBalance(userBalance);
+
+        // Keep localStorage user data in sync as well.
+        const storedUser =
+          localStorage.getItem("stockifyUser");
+
+        if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+
+            localStorage.setItem(
+              "stockifyUser",
+              JSON.stringify({
+                ...user,
+                balance: userBalance,
+              })
+            );
+          } catch (storageError) {
+            console.warn(
+              "Could not update stored user:",
+              storageError
+            );
+          }
+        }
+      } else {
+        setError("Unable to read account balance.");
+      }
+    } catch (err) {
+      console.error(
+        "Failed to fetch user balance:",
+        err
+      );
+
+      setError(
+        err?.response?.data?.message ||
+          "Unable to load your funds."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // ==================================================
+  // INITIAL LOAD + REFRESH AFTER BUY / SELL
+  // ==================================================
+
+  useEffect(() => {
+    // Fetch when Funds page opens.
+    fetchUserBalance();
+
+    /*
+      BuyActionWindow should dispatch:
+
+      window.dispatchEvent(
+        new Event("stockifyBalanceUpdated")
+      );
+
+      after a successful BUY or SELL.
+
+      This listener makes the Funds page immediately
+      display the new balance.
+    */
+    const handleBalanceUpdate = () => {
+      fetchUserBalance();
     };
 
-    fetchUserBalance();
-  }, []);
+    window.addEventListener(
+      "stockifyBalanceUpdated",
+      handleBalanceUpdate
+    );
+
+    /*
+      Also refresh whenever the browser tab becomes active.
+      This handles cases where a trade happened elsewhere.
+    */
+    const handleFocus = () => {
+      fetchUserBalance();
+    };
+
+    window.addEventListener(
+      "focus",
+      handleFocus
+    );
+
+    return () => {
+      window.removeEventListener(
+        "stockifyBalanceUpdated",
+        handleBalanceUpdate
+      );
+
+      window.removeEventListener(
+        "focus",
+        handleFocus
+      );
+    };
+  }, [fetchUserBalance]);
 
   // ==================================================
   // CALCULATIONS
   // ==================================================
 
   /*
-    The backend balance already accounts for:
-    
+    Backend balance already accounts for:
+
     BUY  -> balance decreases
     SELL -> balance increases
 
-    Therefore we should NOT calculate available cash
-    from the holdings array here.
+    Therefore DO NOT calculate available cash
+    from the holdings array.
   */
 
   const availableCash = Math.max(balance, 0);
 
-  const usedMargin =
-    Math.max(
-      OPENING_BALANCE - balance,
-      0
-    );
+  const usedMargin = Math.max(
+    OPENING_BALANCE - balance,
+    0
+  );
 
   const utilization =
     OPENING_BALANCE > 0
       ? (usedMargin / OPENING_BALANCE) * 100
       : 0;
 
-  const progress =
-    Math.min(
-      Math.max(utilization, 0),
-      100
-    );
+  const progress = Math.min(
+    Math.max(utilization, 0),
+    100
+  );
 
-  const isOverLimit =
-    balance < 0;
+  const isOverLimit = balance < 0;
 
   const details = [
     ["Opening balance", OPENING_BALANCE],
@@ -473,11 +543,6 @@ const Funds = () => {
           text-align: center;
         }
 
-        .stockify-funds-loading {
-          color: #737983;
-          font-size: 12px;
-        }
-
         .stockify-funds-error {
           margin-bottom: 20px;
           padding: 12px 14px;
@@ -536,7 +601,6 @@ const Funds = () => {
         {/* HEADER */}
 
         <header className="stockify-funds-header">
-
           <div>
             <p className="stockify-funds-kicker">
               ACCOUNT
@@ -552,7 +616,6 @@ const Funds = () => {
           </div>
 
           <div className="stockify-funds-actions">
-
             <Link
               to="/add-funds"
               className="stockify-funds-button"
@@ -566,11 +629,8 @@ const Funds = () => {
             >
               Withdraw
             </Link>
-
           </div>
-
         </header>
-
 
         {/* ERROR */}
 
@@ -580,61 +640,45 @@ const Funds = () => {
           </div>
         )}
 
-
         {/* SUMMARY CARDS */}
 
         <section className="stockify-funds-summary">
 
           <div className="stockify-funds-summary-card available">
-
             <span className="stockify-funds-summary-label">
               Available margin
             </span>
 
             <h2 className="stockify-funds-summary-value">
-
               {isLoading
                 ? "Loading..."
                 : formatCurrency(availableCash)}
-
             </h2>
 
             <small className="stockify-funds-summary-note">
-
               {isOverLimit
                 ? "Margin limit exceeded"
                 : "Available for new trades"}
-
             </small>
-
           </div>
 
-
           <div className="stockify-funds-summary-card">
-
             <span className="stockify-funds-summary-label">
               Used margin
             </span>
 
             <h2 className="stockify-funds-summary-value">
-
               {isLoading
                 ? "Loading..."
                 : formatCurrency(usedMargin)}
-
             </h2>
 
             <small className="stockify-funds-summary-note">
-
               {utilization.toFixed(1)}% of opening balance
-
             </small>
-
           </div>
 
-
           <div className="stockify-funds-summary-card">
-
             <span className="stockify-funds-summary-label">
               Opening balance
             </span>
@@ -646,16 +690,13 @@ const Funds = () => {
             <small className="stockify-funds-summary-note">
               Demo trading account
             </small>
-
           </div>
 
         </section>
 
-
         {/* MAIN CONTENT */}
 
         <section className="stockify-funds-main">
-
 
           {/* EQUITY CARD */}
 
@@ -664,9 +705,7 @@ const Funds = () => {
             <div className="stockify-funds-card-inner">
 
               <div className="stockify-funds-card-header">
-
                 <div>
-
                   <p className="stockify-funds-card-kicker">
                     EQUITY
                   </p>
@@ -674,7 +713,6 @@ const Funds = () => {
                   <h2 className="stockify-funds-card-title">
                     Trading funds
                   </h2>
-
                 </div>
 
                 <span
@@ -682,20 +720,15 @@ const Funds = () => {
                     isOverLimit ? "warning" : ""
                   }`}
                 >
-                  {isOverLimit
-                    ? "LIMIT"
-                    : "ACTIVE"}
+                  {isOverLimit ? "LIMIT" : "ACTIVE"}
                 </span>
-
               </div>
-
 
               {/* MARGIN METER */}
 
               <div className="stockify-funds-meter">
 
                 <div className="stockify-funds-meter-top">
-
                   <span>
                     Margin utilization
                   </span>
@@ -703,104 +736,69 @@ const Funds = () => {
                   <strong>
                     {utilization.toFixed(1)}%
                   </strong>
-
                 </div>
 
                 <div className="stockify-funds-meter-track">
-
                   <div
                     className={`stockify-funds-meter-fill ${
-                      isOverLimit
-                        ? "warning"
-                        : ""
+                      isOverLimit ? "warning" : ""
                     }`}
                     style={{
                       width: `${progress}%`,
                     }}
                   />
-
                 </div>
 
               </div>
-
 
               {/* BALANCE CARDS */}
 
               <div className="stockify-funds-key-grid">
 
                 <div className="stockify-funds-key-card">
-
-                  <span>
-                    Available
-                  </span>
+                  <span>Available</span>
 
                   <strong>
-                    {formatCurrency(
-                      availableCash
-                    )}
+                    {formatCurrency(availableCash)}
                   </strong>
-
                 </div>
 
-
                 <div className="stockify-funds-key-card">
-
-                  <span>
-                    Used
-                  </span>
+                  <span>Used</span>
 
                   <strong>
-                    {formatCurrency(
-                      usedMargin
-                    )}
+                    {formatCurrency(usedMargin)}
                   </strong>
-
                 </div>
 
-
                 <div className="stockify-funds-key-card">
-
-                  <span>
-                    Opening
-                  </span>
+                  <span>Opening</span>
 
                   <strong>
-                    {formatCurrency(
-                      OPENING_BALANCE
-                    )}
+                    {formatCurrency(OPENING_BALANCE)}
                   </strong>
-
                 </div>
 
               </div>
-
 
               {/* DETAILS */}
 
               <div className="stockify-funds-details">
 
-                {details.map(
-                  ([label, value]) => (
-                    <div
-                      className="stockify-funds-detail"
-                      key={label}
-                    >
+                {details.map(([label, value]) => (
+                  <div
+                    className="stockify-funds-detail"
+                    key={label}
+                  >
+                    <span>{label}</span>
 
-                      <span>
-                        {label}
-                      </span>
-
-                      <span>
-                        {formatCurrency(value)}
-                      </span>
-
-                    </div>
-                  )
-                )}
-
+                    <span>
+                      {formatCurrency(value)}
+                    </span>
+                  </div>
+                ))}
 
                 <div className="stockify-funds-detail total">
-
                   <span>
                     Current account balance
                   </span>
@@ -808,7 +806,6 @@ const Funds = () => {
                   <span>
                     {formatCurrency(balance)}
                   </span>
-
                 </div>
 
               </div>
@@ -816,7 +813,6 @@ const Funds = () => {
             </div>
 
           </article>
-
 
           {/* COMMODITY CARD */}
 
@@ -843,19 +839,9 @@ const Funds = () => {
               </p>
 
               <div className="stockify-funds-benefits">
-
-                <span>
-                  ✓ Market access
-                </span>
-
-                <span>
-                  ✓ Portfolio tracking
-                </span>
-
-                <span>
-                  ✓ Unified dashboard
-                </span>
-
+                <span>✓ Market access</span>
+                <span>✓ Portfolio tracking</span>
+                <span>✓ Unified dashboard</span>
               </div>
 
               <Link
