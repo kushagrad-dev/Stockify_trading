@@ -89,7 +89,7 @@ const SellActionWindow = ({ uid }) => {
       }
 
       // Notify other components that data has changed
-      window.dispatchEvent(new Event("stockify:data-updated"));
+      window.location.reload();
     } catch (err) {
       console.error("Failed to sell stock:", err);
 
