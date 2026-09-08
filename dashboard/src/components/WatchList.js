@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { Tooltip, Grow } from "@mui/material";
 import {
   BarChartOutlined,
@@ -7,10 +7,14 @@ import {
   MoreHoriz,
   SearchOutlined,
 } from "@mui/icons-material";
+import axios from "axios";
 
 import GeneralContext from "./GeneralContext";
 import { watchlist } from "../data/data";
 import { DoughnutChart } from "./DoughnoutChart";
+
+const API_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:3008";
 
 const chartColors = [
   "rgba(56, 126, 209, 0.55)",
@@ -32,34 +36,189 @@ const chartBorderColors = [
 
 const WatchList = () => {
   const [search, setSearch] = useState("");
+  const [allStocks, setAllStocks] = useState(
+    Array.isArray(watchlist) ? watchlist : []
+  );
+
+  // ==================================================
+  // LOAD ALL HOLDINGS AND MERGE WITH WATCHLIST
+  // ==================================================
+
+  useEffect(() => {
+    const fetchAllStocks = async () => {
+      try {
+        const token = localStorage.getItem("stockifyToken");
+
+        if (!token) {
+          setAllStocks(Array.isArray(watchlist) ? watchlist : []);
+          return;
+        }
+
+        const response = await axios.get(
+          `${API_URL}/allholdings`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        const holdings = Array.isArray(response?.data?.data)
+          ? response.data.data
+          : [];
+
+        // Start with the normal watchlist.
+        const mergedMap = new Map();
+
+        if (Array.isArray(watchlist)) {
+          watchlist.forEach((stock) => {
+            if (!stock?.name) return;
+
+            const key = String(stock.name).toUpperCase();
+
+            mergedMap.set(key, {
+              ...stock,
+              name: stock.name,
+              qty: Number(stock.qty) || 0,
+            });
+          });
+        }
+
+        // Add every stock returned by the backend.
+        // Existing watchlist stocks are updated with holding data.
+        holdings.forEach((holding) => {
+          if (!holding?.name) return;
+
+          const key = String(holding.name).toUpperCase();
+          const existing = mergedMap.get(key);
+
+          mergedMap.set(key, {
+            ...(existing || {}),
+            ...holding,
+            name: existing?.name || holding.name,
+
+            // Keep the market/watchlist price when available.
+            price:
+              Number(existing?.price) > 0
+                ? Number(existing.price)
+                : Number(holding.price) || 0,
+
+            // IMPORTANT:
+            // Stocks remain visible even when qty is 0.
+            qty: Number(holding.qty) || 0,
+
+            percent:
+              existing?.percent ??
+              holding?.percent ??
+              "0.00%",
+
+            isDown:
+              existing?.isDown ??
+              Boolean(holding?.isDown),
+          });
+        });
+
+        setAllStocks(Array.from(mergedMap.values()));
+      } catch (error) {
+        console.error(
+          "Failed to load holdings for watchlist:",
+          error
+        );
+
+        // If backend fails, don't destroy the existing watchlist.
+        setAllStocks(
+          Array.isArray(watchlist) ? watchlist : []
+        );
+      }
+    };
+
+    fetchAllStocks();
+
+    // Refresh watchlist after buy/sell.
+    const handleDataUpdated = () => {
+      fetchAllStocks();
+    };
+
+    const handleBalanceUpdated = () => {
+      fetchAllStocks();
+    };
+
+    window.addEventListener(
+      "stockify:data-updated",
+      handleDataUpdated
+    );
+
+    window.addEventListener(
+      "stockifyBalanceUpdated",
+      handleBalanceUpdated
+    );
+
+    return () => {
+      window.removeEventListener(
+        "stockify:data-updated",
+        handleDataUpdated
+      );
+
+      window.removeEventListener(
+        "stockifyBalanceUpdated",
+        handleBalanceUpdated
+      );
+    };
+  }, []);
+
+  // ==================================================
+  // SEARCH
+  // ==================================================
 
   const filteredStocks = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    if (!query) return watchlist;
+    if (!query) {
+      return allStocks;
+    }
 
-    return watchlist.filter((stock) =>
-      String(stock.name).toLowerCase().includes(query)
+    return allStocks.filter((stock) =>
+      String(stock?.name || "")
+        .toLowerCase()
+        .includes(query)
     );
-  }, [search]);
+  }, [search, allStocks]);
 
-  const data = {
-    labels: watchlist.map((stock) => stock.name),
-    datasets: [
-      {
-        label: "Price",
-        data: watchlist.map((stock) => Number(stock.price) || 0),
-        backgroundColor: watchlist.map(
-          (_, index) => chartColors[index % chartColors.length]
-        ),
-        borderColor: watchlist.map(
-          (_, index) =>
-            chartBorderColors[index % chartBorderColors.length]
-        ),
-        borderWidth: 1,
-      },
-    ],
-  };
+  // ==================================================
+  // CHART
+  // ==================================================
+
+  const data = useMemo(
+    () => ({
+      labels: allStocks.map((stock) => stock.name),
+
+      datasets: [
+        {
+          label: "Price",
+
+          data: allStocks.map(
+            (stock) => Number(stock.price) || 0
+          ),
+
+          backgroundColor: allStocks.map(
+            (_, index) =>
+              chartColors[index % chartColors.length]
+          ),
+
+          borderColor: allStocks.map(
+            (_, index) =>
+              chartBorderColors[
+                index % chartBorderColors.length
+              ]
+          ),
+
+          borderWidth: 1,
+        },
+      ],
+    }),
+    [allStocks]
+  );
 
   return (
     <>
@@ -485,7 +644,7 @@ const WatchList = () => {
           </div>
 
           <span className="stockify-watchlist-limit">
-            {watchlist.length} / 50 stocks
+            {allStocks.length} stocks
           </span>
         </header>
 
@@ -530,7 +689,7 @@ const WatchList = () => {
                 {filteredStocks.map((stock) => (
                   <WatchListItem
                     stock={stock}
-                    key={stock.name}
+                    key={String(stock.name).toUpperCase()}
                   />
                 ))}
               </ul>
@@ -576,31 +735,33 @@ const WatchList = () => {
 
 export default WatchList;
 
+
+// ==================================================
+// WATCHLIST ITEM
+// ==================================================
+
 const WatchListItem = ({ stock }) => {
 
   const formattedPrice = Number(
-    stock.price || 0
+    stock?.price || 0
   ).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
-  const isDown = Boolean(stock.isDown);
+  const isDown = Boolean(stock?.isDown);
 
   return (
-    <li
-      className="stockify-watchlist-row"
-      
-    >
+    <li className="stockify-watchlist-row">
 
       <div className="stockify-watchlist-stock">
 
         <span className="stockify-watchlist-symbol">
-          {String(stock.name).slice(0, 2)}
+          {String(stock?.name || "").slice(0, 2)}
         </span>
 
         <span className="stockify-watchlist-name">
-          {stock.name}
+          {stock?.name}
         </span>
 
       </div>
@@ -612,7 +773,7 @@ const WatchListItem = ({ stock }) => {
             isDown ? "down" : "up"
           }`}
         >
-          {stock.percent}
+          {stock?.percent || "0.00%"}
         </span>
 
         {isDown ? (
@@ -631,13 +792,19 @@ const WatchListItem = ({ stock }) => {
 
       </div>
 
-      <WatchListActions uid={stock.name} />
+      <WatchListActions uid={stock?.name} />
 
     </li>
   );
 };
 
+
+// ==================================================
+// BUY / SELL ACTIONS
+// ==================================================
+
 const WatchListActions = ({ uid }) => {
+
   const generalContext = useContext(GeneralContext);
 
   const handleBuyClick = () => {
