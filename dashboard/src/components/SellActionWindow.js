@@ -14,8 +14,8 @@ const SellActionWindow = ({ uid }) => {
     () =>
       watchlist.find(
         (stock) =>
-          String(stock.name).toUpperCase() ===
-          String(uid).toUpperCase()
+          String(stock?.name || "").toUpperCase() ===
+          String(uid || "").toUpperCase()
       ),
     [uid]
   );
@@ -32,6 +32,7 @@ const SellActionWindow = ({ uid }) => {
   const handleSellClick = async () => {
     const quantity = Number(stockQuantity);
 
+    // Quantity validation
     if (!Number.isFinite(quantity) || quantity <= 0) {
       setError("Please enter a valid quantity.");
       return;
@@ -42,8 +43,23 @@ const SellActionWindow = ({ uid }) => {
       return;
     }
 
+    // Price validation
     if (!currentStockPrice || currentStockPrice <= 0) {
       setError("Current stock price is not available.");
+      return;
+    }
+
+    // Stock validation
+    if (!selectedStock) {
+      setError(`Stock ${uid || ""} could not be found.`);
+      return;
+    }
+
+    // JWT token
+    const token = localStorage.getItem("stockifyToken");
+
+    if (!token) {
+      setError("Please login before selling shares.");
       return;
     }
 
@@ -51,33 +67,52 @@ const SellActionWindow = ({ uid }) => {
     setIsSubmitting(true);
 
     try {
-      await axios.post(`${API_URL}/sellOrder`, {
-        name: uid,
-        qty: quantity,
-        price: currentStockPrice,
-        mode: "SELL",
-      });
+      await axios.post(
+        `${API_URL}/sellOrder`,
+        {
+          name: uid,
+          qty: quantity,
+          price: currentStockPrice,
+          mode: "SELL",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
+      // Close sell window
       if (generalContext?.closeSellWindow) {
         generalContext.closeSellWindow();
       }
 
-      // Refresh the dashboard so Holdings/Orders update.
+      // Notify other components that data has changed
       window.dispatchEvent(new Event("stockify:data-updated"));
     } catch (err) {
       console.error("Failed to sell stock:", err);
 
-      setError(
-        err?.response?.data?.message ||
-          "Unable to sell the stock. Please check that the backend is running."
-      );
+      if (err?.response?.status === 401) {
+        setError(
+          "Your session has expired. Please login again."
+        );
+      } else {
+        setError(
+          err?.response?.data?.message ||
+            "Unable to sell the stock. Please check that the backend is running."
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleCancelClick = () => {
-    if (!isSubmitting && generalContext?.closeSellWindow) {
+    if (
+      !isSubmitting &&
+      generalContext?.closeSellWindow
+    ) {
       generalContext.closeSellWindow();
     }
   };
@@ -259,6 +294,7 @@ const SellActionWindow = ({ uid }) => {
           }
         `}</style>
 
+        {/* HEADER */}
         <div className="stockify-sell-header">
           <div>
             <p className="stockify-sell-eyebrow">
@@ -278,8 +314,10 @@ const SellActionWindow = ({ uid }) => {
           </span>
         </div>
 
+        {/* BODY */}
         <div className="stockify-sell-body">
           <div className="stockify-sell-grid">
+            {/* QUANTITY */}
             <div>
               <label
                 className="stockify-sell-label"
@@ -303,13 +341,18 @@ const SellActionWindow = ({ uid }) => {
               />
             </div>
 
+            {/* PRICE */}
             <div>
-              <label className="stockify-sell-label">
+              <label
+                className="stockify-sell-label"
+                htmlFor="stockify-sell-price"
+              >
                 Current price per share
               </label>
 
               <input
                 className="stockify-sell-input"
+                id="stockify-sell-price"
                 type="number"
                 value={currentStockPrice}
                 readOnly
@@ -318,12 +361,15 @@ const SellActionWindow = ({ uid }) => {
             </div>
           </div>
 
+          {/* STOCK NOT FOUND */}
           {!selectedStock && (
             <p className="stockify-sell-error">
-              Current price for {uid || "this stock"} could not be found.
+              Current price for{" "}
+              {uid || "this stock"} could not be found.
             </p>
           )}
 
+          {/* TOTAL */}
           <div className="stockify-sell-summary">
             <p className="stockify-sell-summary-label">
               Total sell value
@@ -338,6 +384,7 @@ const SellActionWindow = ({ uid }) => {
             </p>
           </div>
 
+          {/* ERROR */}
           {error && (
             <p className="stockify-sell-error">
               {error}
@@ -345,6 +392,7 @@ const SellActionWindow = ({ uid }) => {
           )}
         </div>
 
+        {/* FOOTER */}
         <div className="stockify-sell-footer">
           <button
             type="button"
@@ -359,7 +407,9 @@ const SellActionWindow = ({ uid }) => {
             type="button"
             className="stockify-sell-button sell"
             onClick={handleSellClick}
-            disabled={isSubmitting || !selectedStock}
+            disabled={
+              isSubmitting || !selectedStock
+            }
           >
             {isSubmitting ? "Selling..." : "Sell"}
           </button>

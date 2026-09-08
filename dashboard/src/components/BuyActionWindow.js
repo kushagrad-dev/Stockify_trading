@@ -35,17 +35,9 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // ======================================================
-  // GET JWT TOKEN
-  // ======================================================
-
   const getAuthToken = () => {
     return localStorage.getItem("stockifyToken");
   };
-
-  // ======================================================
-  // AUTH HEADERS
-  // ======================================================
 
   const getAuthConfig = () => {
     const token = getAuthToken();
@@ -62,10 +54,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     };
   };
 
-  // ======================================================
-  // CHECK LOGIN
-  // ======================================================
-
   useEffect(() => {
     const token = getAuthToken();
 
@@ -73,10 +61,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
       setError("Please login before placing an order.");
     }
   }, []);
-
-  // ======================================================
-  // GET HOLDING WHEN SELL WINDOW OPENS
-  // ======================================================
 
   useEffect(() => {
     if (!isSellMode || !uid) {
@@ -150,10 +134,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     fetchHolding();
   }, [uid, isSellMode]);
 
-  // ======================================================
-  // TOTAL ORDER VALUE
-  // ======================================================
-
   const marginRequired = useMemo(() => {
     const quantity = Number(stockQuantity) || 0;
     const price = Number(stockPrice) || 0;
@@ -161,17 +141,9 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     return quantity * price;
   }, [stockQuantity, stockPrice]);
 
-  // ======================================================
-  // BUY / SELL
-  // ======================================================
-
   const handleActionClick = async () => {
     const quantity = Number(stockQuantity);
     const price = Number(stockPrice);
-
-    // ----------------------------------------------------
-    // AUTHENTICATION
-    // ----------------------------------------------------
 
     const token = getAuthToken();
 
@@ -179,10 +151,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
       setError("Please login before placing an order.");
       return;
     }
-
-    // ----------------------------------------------------
-    // QUANTITY VALIDATION
-    // ----------------------------------------------------
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
       setError("Please enter a valid quantity.");
@@ -194,27 +162,15 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
       return;
     }
 
-    // ----------------------------------------------------
-    // PRICE VALIDATION
-    // ----------------------------------------------------
-
     if (!Number.isFinite(price) || price <= 0) {
       setError("Current stock price is not available.");
       return;
     }
 
-    // ----------------------------------------------------
-    // STOCK VALIDATION
-    // ----------------------------------------------------
-
     if (!selectedStock) {
       setError(`Stock ${uid || ""} could not be found.`);
       return;
     }
-
-    // ----------------------------------------------------
-    // SELL VALIDATION
-    // ----------------------------------------------------
 
     if (isSellMode) {
       if (ownedQuantity === null) {
@@ -249,10 +205,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
         return;
       }
 
-      // ==================================================
-      // SELL ORDER
-      // ==================================================
-
       if (isSellMode) {
         await axios.post(
           `${API_URL}/sellOrder`,
@@ -260,16 +212,11 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
             name: uid,
             qty: quantity,
             price: price,
+            mode: "SELL",
           },
           config
         );
-      }
-
-      // ==================================================
-      // BUY ORDER
-      // ==================================================
-
-      else {
+      } else {
         await axios.post(
           `${API_URL}/addOrders`,
           {
@@ -282,17 +229,11 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
         );
       }
 
-      // ==================================================
-      // CLOSE WINDOW
-      // ==================================================
-
       if (generalContext?.closeBuyWindow) {
         generalContext.closeBuyWindow();
       }
 
-      // ==================================================
-      // REFRESH DASHBOARD
-      // ==================================================
+      window.dispatchEvent(new Event("stockify:data-updated"));
 
       window.location.reload();
     } catch (err) {
@@ -320,10 +261,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     }
   };
 
-  // ======================================================
-  // CANCEL
-  // ======================================================
-
   const handleCancelClick = () => {
     if (
       !isSubmitting &&
@@ -332,10 +269,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
       generalContext.closeBuyWindow();
     }
   };
-
-  // ======================================================
-  // FORMATTING
-  // ======================================================
 
   const formattedPrice = Number(stockPrice || 0).toLocaleString(
     "en-IN",
@@ -353,10 +286,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     }
   );
 
-  // ======================================================
-  // BUTTON STATE
-  // ======================================================
-
   const isActionDisabled =
     isSubmitting ||
     isLoadingHolding ||
@@ -364,10 +293,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
     !getAuthToken() ||
     (isSellMode &&
       (ownedQuantity === null || ownedQuantity <= 0));
-
-  // ======================================================
-  // UI
-  // ======================================================
 
   return (
     <div className="stockify-buy-overlay">
@@ -630,7 +555,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
           }
         `}</style>
 
-        {/* HEADER */}
         <div className="stockify-buy-header">
           <div className="stockify-buy-heading">
             <p className="stockify-buy-eyebrow">
@@ -650,11 +574,8 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
           </span>
         </div>
 
-        {/* BODY */}
         <div className="stockify-buy-body">
           <div className="stockify-buy-input-grid">
-
-            {/* QUANTITY */}
             <div className="stockify-buy-field">
               <label
                 className="stockify-buy-label"
@@ -686,7 +607,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
               />
             </div>
 
-            {/* PRICE */}
             <div className="stockify-buy-field">
               <label
                 className="stockify-buy-label"
@@ -706,7 +626,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
             </div>
           </div>
 
-          {/* OWNED QUANTITY */}
           {isSellMode && ownedQuantity !== null && (
             <p className="stockify-buy-holding">
               Available to sell:{" "}
@@ -715,7 +634,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
             </p>
           )}
 
-          {/* STOCK NOT FOUND */}
           {!selectedStock && (
             <p className="stockify-buy-error">
               Current price for{" "}
@@ -723,7 +641,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
             </p>
           )}
 
-          {/* TOTAL */}
           <div className="stockify-buy-summary">
             <div>
               <p className="stockify-buy-summary-label">
@@ -742,7 +659,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
             </span>
           </div>
 
-          {/* ERROR */}
           {error && (
             <p className="stockify-buy-error">
               {error}
@@ -750,7 +666,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
           )}
         </div>
 
-        {/* FOOTER */}
         <div className="stockify-buy-footer">
           <div className="stockify-buy-margin">
             <span className="stockify-buy-margin-label">
@@ -763,7 +678,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
           </div>
 
           <div className="stockify-buy-actions">
-            {/* CANCEL */}
             <button
               type="button"
               className="stockify-buy-button cancel"
@@ -773,7 +687,6 @@ const BuyActionWindow = ({ uid, mode = "BUY" }) => {
               Cancel
             </button>
 
-            {/* BUY / SELL */}
             <button
               type="button"
               className={`stockify-buy-button ${
